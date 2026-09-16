@@ -3,78 +3,112 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shadow V3 - T3 Quant Terminal</title>
+    <title>Shadow V3 - T3 Quant AI Engine</title>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; font-family: 'JetBrains Mono', monospace; }
-        body { background-color: #070709; color: #e0e0e0; margin: 0; padding: 20px; display: flex; justify-content: center; }
-        .terminal { max-width: 650px; width: 100%; border: 1px solid #1f1f2e; background: #0c0c10; padding: 20px; border-radius: 6px; box-shadow: 0 0 20px rgba(0,0,0,0.8); }
+        body { background-color: #050507; color: #e0e0e0; margin: 0; padding: 15px; display: flex; justify-content: center; }
+        .terminal { max-width: 900px; width: 100%; border: 1px solid #1f1f2e; background: #0c0c10; padding: 20px; border-radius: 6px; box-shadow: 0 0 25px rgba(0,0,0,0.9); }
         .topbar { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1f1f2e; padding-bottom: 12px; margin-bottom: 20px; }
         .logo { font-size: 18px; font-weight: bold; color: #00E676; letter-spacing: 1px; }
         .status-server { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #888; }
         .led { width: 8px; height: 8px; background-color: #00E676; border-radius: 50%; box-shadow: 0 0 8px #00E676; animation: pulsar 1.5s infinite; }
         @keyframes pulsar { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
         
+        .grid-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 768px) { .grid-layout { grid-template-columns: 1fr; } }
+
         .btn-analisar { background-color: #00E676; color: #000; border: none; padding: 12px; font-weight: bold; cursor: pointer; border-radius: 4px; width: 100%; font-size: 14px; margin-bottom: 20px; text-transform: uppercase; transition: 0.2s; }
         .btn-analisar:hover { background-color: #00c853; box-shadow: 0 0 10px rgba(0,230,118,0.4); }
         
-        .card { background-color: #121218; padding: 20px; border-radius: 4px; display: none; border-left: 4px solid #333; border-top: 1px solid #1f1f2e; border-right: 1px solid #1f1f2e; border-bottom: 1px solid #1f1f2e; }
-        .status-badge { display: inline-block; padding: 4px 10px; border-radius: 3px; font-size: 11px; font-weight: bold; margin-bottom: 15px; letter-spacing: 1px; }
+        .card { background-color: #121218; padding: 15px; border-radius: 4px; border: 1px solid #1f1f2e; margin-bottom: 15px; }
+        .status-badge { display: inline-block; padding: 4px 10px; border-radius: 3px; font-size: 11px; font-weight: bold; margin-bottom: 10px; letter-spacing: 1px; }
         .setup-ok { background-color: rgba(0,230,118,0.15); color: #00E676; border: 1px solid #00E676; }
         .setup-wait { background-color: rgba(255,23,68,0.15); color: #FF1744; border: 1px solid #FF1744; }
         
-        .info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+        .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 15px; }
         .info-box { background-color: #1a1a24; padding: 10px; border-radius: 3px; border: 1px solid #282838; }
         .info-label { font-size: 10px; color: #888; text-transform: uppercase; }
-        .info-value { font-size: 15px; font-weight: bold; margin-top: 4px; color: #fff; }
+        .info-value { font-size: 14px; font-weight: bold; margin-top: 4px; color: #fff; }
         
-        .ai-box { background-color: #1a1a24; padding: 12px; border-radius: 3px; font-size: 13px; line-height: 1.5; border-left: 3px solid #00E676; color: #ccc; }
+        .ai-box { background-color: #1a1a24; padding: 12px; border-radius: 3px; font-size: 12px; line-height: 1.5; border-left: 3px solid #00E676; color: #ccc; margin-top: 10px; }
         #loading { display: none; text-align: center; color: #888; font-size: 12px; margin-bottom: 20px; font-style: italic; }
+        .chart-container { width: 100%; height: 350px; background: #121218; border-radius: 4px; border: 1px solid #1f1f2e; overflow: hidden; }
     </style>
 </head>
 <body>
 
     <div class="terminal">
         <div class="topbar">
-            <div class="logo">SHADOW V3 // T3 QUANT</div>
+            <div class="logo">SHADOW V3 // T3 QUANT AI</div>
             <div class="status-server">
-                <div class="led"></div> NUVEM ATIVA
+                <div class="led"></div> MOTOR COGNITIVO ATIVO
             </div>
         </div>
 
-        <button class="btn-analisar" onclick="buscarAnalise()">⚡ Executar Varredura XAUUSD</button>
-        <div id="loading">Varrendo livro de ordens e calculando EMA 21 + RSI...</div>
+        <button class="btn-analisar" onclick="buscarAnalise()">⚡ Executar Varredura & Raciocínio Tático</button>
+        <div id="loading">Analisando livro de ordens, DXY, zonas de liquidez e inteligência artificial...</div>
 
-        <div class="card" id="painel-resultado">
-            <div id="badge-status" class="status-badge"></div>
-            
-            <div class="info-grid" id="grid-valores" style="display: none;">
-                <div class="info-box">
-                    <div class="info-label">Entrada</div>
-                    <div class="info-value" id="val-entrada" style="color: #00E676;">--</div>
-                </div>
-                <div class="info-box">
-                    <div class="info-label">Stop Loss</div>
-                    <div class="info-value" id="val-stop" style="color: #FF1744;">--</div>
-                </div>
-                <div class="info-box">
-                    <div class="info-label">Take Profit</div>
-                    <div class="info-value" id="val-alvo" style="color: #00E676;">--</div>
+        <div class="grid-layout">
+            <!-- Coluna da Esquerda: O que o robô está pensando, Entradas, SL, TP e Zonas -->
+            <div>
+                <div class="card" id="painel-resultado" style="display: none;">
+                    <div id="badge-status" class="status-badge"></div>
+                    
+                    <div class="info-grid" id="grid-valores" style="display: none;">
+                        <div class="info-box">
+                            <div class="info-label">Preço de Entrada</div>
+                            <div class="info-value" id="val-entrada" style="color: #00E676;">--</div>
+                        </div>
+                        <div class="info-box">
+                            <div class="info-label">Take Profit (Alvo)</div>
+                            <div class="info-value" id="val-alvo" style="color: #00E676;">--</div>
+                        </div>
+                        <div class="info-box" style="grid-column: span 2;">
+                            <div class="info-label">Stop Loss (Proteção)</div>
+                            <div class="info-value" id="val-stop" style="color: #FF1744;">--</div>
+                        </div>
+                    </div>
+
+                    <!-- Zonas de Liquidez e Macro -->
+                    <div class="info-grid">
+                        <div class="info-box">
+                            <div class="info-label">Resistência (Liquidez +)</div>
+                            <div class="info-value" id="val-res" style="color: #FF1744;">--</div>
+                        </div>
+                        <div class="info-box">
+                            <div class="info-label">Suporte (Liquidez -)</div>
+                            <div class="info-value" id="val-sup" style="color: #00E676;">--</div>
+                        </div>
+                    </div>
+
+                    <div class="info-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 10px;">
+                        <div class="info-box">
+                            <div class="info-label">XAUUSD Atual</div>
+                            <div class="info-value" id="val-preco">--</div>
+                        </div>
+                        <div class="info-box">
+                            <div class="info-label">DXY Atual</div>
+                            <div class="info-value" id="val-dxy" style="color: #4facfe;">--</div>
+                        </div>
+                    </div>
+
+                    <div style="font-size: 11px; color: #888; text-transform: uppercase; margin-top: 15px;">🧠 O que o Robô está Pensando & Porquê:</div>
+                    <div class="ai-box" id="texto-ia"></div>
                 </div>
             </div>
 
-            <div class="info-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 15px;">
-                <div class="info-box">
-                    <div class="info-label">Preço Atual</div>
-                    <div class="info-value" id="val-preco">--</div>
-                </div>
-                <div class="info-box">
-                    <div class="info-label">RSI (14)</div>
-                    <div class="info-value" id="val-rsi">--</div>
+            <!-- Coluna da Direita: Gráfico do DXY -->
+            <div>
+                <div class="card" style="display: block; padding: 0;">
+                    <div style="padding: 10px; font-size: 11px; background: #1a1a24; border-bottom: 1px solid #1f1f2e; color: #888;">
+                        📊 CORRELAÇÃO MACRO: DXY (ÍNDICE DÓLAR)
+                    </div>
+                    <div class="chart-container">
+                        <iframe scrolling="no" allowtransparency="true" frameborder="0" src="https://www.tradingview-widget.com/embed-widget/mini-symbol-overview/?locale=br#%7B%22symbol%22%3A%22TVC%3ADXY%22%2C%22width%22%3A%22100%25%22%2C%22height%22%3A%22100%25%22%2C%22locale%22%3A%22br%22%2C%22dateRange%22%3A%221D%22%2C%22colorTheme%22%3A%22dark%22%2C%22trendLineColor%22%3A%22%232962FF%22%2C%22underLineColor%22%3A%22rgba(41%2C%22%2C%22underLineBottomColor%22%3A%22rgba(41%2C%22%2C%22isTransparent%22%3Atrue%2C%22autosize%22%3Atrue%2C%22largeChartUrl%22%3A%22%22%7D" style="width:100%; height:100%;"></iframe>
+                    </div>
                 </div>
             </div>
-
-            <div class="ai-box" id="texto-ia"></div>
         </div>
     </div>
 
@@ -95,12 +129,14 @@
                 painel.style.display = 'block';
                 document.getElementById('texto-ia').innerText = dados.explicacao_ia;
                 document.getElementById('val-preco').innerText = dados.preco_atual;
-                document.getElementById('val-rsi').innerText = dados.rsi;
+                document.getElementById('val-dxy').innerText = dados.dxy_atual;
+                document.getElementById('val-res').innerText = dados.liquidez_superior;
+                document.getElementById('val-sup').innerText = dados.liquidez_inferior;
 
                 if(dados.status === "SETUP_CONFIRMADO") {
                     painel.style.borderLeftColor = "#00E676";
                     badge.className = "status-badge setup-ok";
-                    badge.innerText = "🟢 SETUP COMPRA CONFIRMADO";
+                    badge.innerText = "🟢 SETUP CONFIRMADO // ENTRADA GATILHADA";
                     grid.style.display = 'grid';
                     
                     document.getElementById('val-entrada').innerText = dados.entrada;
@@ -109,11 +145,11 @@
                 } else {
                     painel.style.borderLeftColor = "#FF1744";
                     badge.className = "status-badge setup-wait";
-                    badge.innerText = "⏸️ AGUARDANDO PULLBACK";
+                    badge.innerText = "⏸️ AGUARDANDO ZONA DE LIQUIDEZ";
                     grid.style.display = 'none';
                 }
             } catch (erro) {
-                document.getElementById('loading').innerText = "Erro ao conectar com o terminal na nuvem.";
+                document.getElementById('loading').innerText = "Erro ao conectar com o motor central.";
             }
         }
     </script>
