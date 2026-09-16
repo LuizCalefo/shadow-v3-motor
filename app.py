@@ -2,19 +2,14 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 import requests
 import pandas as pd
-from google import genai
 import json
 import os
 
 app = Flask(__name__)
 CORS(app)
 
-# O código agora puxa as chaves diretamente do cofre do Render (Environment Variables)
-# NÃO COLOQUE SUAS CHAVES REAIS AQUI NO TEXTO!
 TWELVEDATA_KEY = os.environ.get("TWELVEDATA_KEY")
 GEMINI_KEY = os.environ.get("GEMINI_KEY")
-
-cliente = genai.Client(api_key=GEMINI_KEY)
 
 @app.route('/analisar-ouro')
 def analisar_ouro():
@@ -76,12 +71,25 @@ def analisar_ouro():
     Dados: {json.dumps(resultado_motor)}
     """
     
-    resposta_ia = cliente.models.generate_content(
-        model='gemini-1.5-flash',
-        contents=prompt,
-    )
+    # CONEXÃO DIRETA COM O GEMINI (Ignorando a biblioteca bugada)
+    gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}]
+    }
+    
+    try:
+        resp_gemini = requests.post(gemini_url, headers={"Content-Type": "application/json"}, json=payload)
+        dados_gemini = resp_gemini.json()
+        
+        if "candidates" in dados_gemini:
+            texto_ia = dados_gemini["candidates"][0]["content"]["parts"][0]["text"].strip()
+            resultado_motor["explicacao_ia"] = texto_ia
+        else:
+            # Se der qualquer erro, o painel avisa, mas não trava!
+            resultado_motor["explicacao_ia"] = "IA indisponível. Motivo: " + str(dados_gemini.get('error', 'Erro desconhecido'))
+    except Exception as e:
+        resultado_motor["explicacao_ia"] = "Falha na comunicação direta com o Google."
 
-    resultado_motor["explicacao_ia"] = resposta_ia.text.strip()
     return jsonify(resultado_motor)
 
 if __name__ == '__main__':
