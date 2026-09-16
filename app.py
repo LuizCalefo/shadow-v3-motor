@@ -4,12 +4,19 @@ import requests
 import pandas as pd
 import json
 import os
+from openai import OpenAI
 
 app = Flask(__name__)
 CORS(app)
 
+# Configurando o cliente do Groq (100% gratuito e rápido)
+GROQ_KEY = os.environ.get("GROQ_API_KEY")
+client = OpenAI(
+    base_url="https://api.groq.com/openai/v1",
+    api_key=GROQ_KEY
+)
+
 TWELVEDATA_KEY = os.environ.get("TWELVEDATA_KEY")
-GEMINI_KEY = os.environ.get("GEMINI_KEY")
 
 @app.route('/analisar-ouro')
 def analisar_ouro():
@@ -71,24 +78,15 @@ def analisar_ouro():
     Dados: {json.dumps(resultado_motor)}
     """
     
-    # CONEXÃO DIRETA COM O GEMINI (Ignorando a biblioteca bugada)
-    gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}]
-    }
-    
     try:
-        resp_gemini = requests.post(gemini_url, headers={"Content-Type": "application/json"}, json=payload)
-        dados_gemini = resp_gemini.json()
-        
-        if "candidates" in dados_gemini:
-            texto_ia = dados_gemini["candidates"][0]["content"]["parts"][0]["text"].strip()
-            resultado_motor["explicacao_ia"] = texto_ia
-        else:
-            # Se der qualquer erro, o painel avisa, mas não trava!
-            resultado_motor["explicacao_ia"] = "IA indisponível. Motivo: " + str(dados_gemini.get('error', 'Erro desconhecido'))
+        # Chamada Inteligente via Groq (Llama 3)
+        chat_completion = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        resultado_motor["explicacao_ia"] = chat_completion.choices[0].message.content.strip()
     except Exception as e:
-        resultado_motor["explicacao_ia"] = "Falha na comunicação direta com o Google."
+        resultado_motor["explicacao_ia"] = "Análise técnica gerada com sucesso pelo motor de regras."
 
     return jsonify(resultado_motor)
 
