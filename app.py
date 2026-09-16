@@ -4,16 +4,17 @@ import requests
 import pandas as pd
 from google import genai
 import json
-import os # <--- FERRAMENTA NOVA: Lê o cofre de senhas da nuvem
+import os
 
 app = Flask(__name__)
 CORS(app)
 
-# AGORA AS CHAVES ESTÃO ESCONDIDAS! O código vai puxar do cofre do Render.
-TWELVEDATA_KEY = os.environ.get("fd6c4dae68e64910821670e6af6bc132")
-GEMINI_KEY = os.environ.get("GAQ.Ab8RN6KmPMtH8L4uys8zOZ1AvhbzIcOHW2CE8ROkN4JQUK8kfA")
+# O código agora puxa as chaves diretamente do cofre do Render (Environment Variables)
+# NÃO COLOQUE SUAS CHAVES REAIS AQUI NO TEXTO!
+TWELVEDATA_KEY = os.environ.get("TWELVEDATA_KEY")
+GEMINI_KEY = os.environ.get("GEMINI_KEY")
 
-cliente = genai.Client(api_key=AQ.Ab8RN6KmPMtH8L4uys8zOZ1AvhbzIcOHW2CE8ROkN4JQUK8kfA)
+cliente = genai.Client(api_key=GEMINI_KEY)
 
 @app.route('/analisar-ouro')
 def analisar_ouro():
@@ -76,7 +77,7 @@ def analisar_ouro():
     """
     
     resposta_ia = cliente.models.generate_content(
-        model='gemini-3.6-flash',
+        model='gemini-1.5-flash',
         contents=prompt,
     )
 
