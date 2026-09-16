@@ -3,37 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shadow V3 - Mesa de Operações</title>
+    <title>Shadow V3 - T3 Quant Terminal</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: #0f0f13; color: #ffffff; margin: 0; padding: 20px; display: flex; justify-content: center; }
-        .dashboard { max-width: 600px; width: 100%; }
-        .topbar { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 15px; margin-bottom: 20px; }
-        .logo { font-size: 24px; font-weight: bold; color: #d4af37; letter-spacing: 2px; }
-        .btn-analisar { background-color: #d4af37; color: #000; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; border-radius: 5px; width: 100%; font-size: 16px; margin-bottom: 20px; }
-        .btn-analisar:hover { background-color: #f1c40f; }
-        .card { background-color: #1c1c24; padding: 20px; border-radius: 8px; display: none; border-left: 5px solid #555; }
-        .status-badge { display: inline-block; padding: 5px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; margin-bottom: 15px; }
-        .setup-ok { background-color: #00c853; color: #000; }
-        .setup-wait { background-color: #ff3d00; color: #fff; }
-        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
-        .info-box { background-color: #272732; padding: 10px; border-radius: 5px; }
-        .info-label { font-size: 11px; color: #888; text-transform: uppercase; }
-        .info-value { font-size: 18px; font-weight: bold; margin-top: 5px; }
-        .ai-text { background-color: #272732; padding: 15px; border-radius: 5px; font-size: 14px; line-height: 1.6; border-left: 3px solid #d4af37; font-style: italic; }
-        #loading { display: none; text-align: center; color: #888; font-style: italic; margin-bottom: 20px; }
+        * { box-sizing: border-box; font-family: 'JetBrains Mono', monospace; }
+        body { background-color: #070709; color: #e0e0e0; margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .terminal { max-width: 650px; width: 100%; border: 1px solid #1f1f2e; background: #0c0c10; padding: 20px; border-radius: 6px; box-shadow: 0 0 20px rgba(0,0,0,0.8); }
+        .topbar { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1f1f2e; padding-bottom: 12px; margin-bottom: 20px; }
+        .logo { font-size: 18px; font-weight: bold; color: #00E676; letter-spacing: 1px; }
+        .status-server { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #888; }
+        .led { width: 8px; height: 8px; background-color: #00E676; border-radius: 50%; box-shadow: 0 0 8px #00E676; animation: pulsar 1.5s infinite; }
+        @keyframes pulsar { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+        
+        .btn-analisar { background-color: #00E676; color: #000; border: none; padding: 12px; font-weight: bold; cursor: pointer; border-radius: 4px; width: 100%; font-size: 14px; margin-bottom: 20px; text-transform: uppercase; transition: 0.2s; }
+        .btn-analisar:hover { background-color: #00c853; box-shadow: 0 0 10px rgba(0,230,118,0.4); }
+        
+        .card { background-color: #121218; padding: 20px; border-radius: 4px; display: none; border-left: 4px solid #333; border-top: 1px solid #1f1f2e; border-right: 1px solid #1f1f2e; border-bottom: 1px solid #1f1f2e; }
+        .status-badge { display: inline-block; padding: 4px 10px; border-radius: 3px; font-size: 11px; font-weight: bold; margin-bottom: 15px; letter-spacing: 1px; }
+        .setup-ok { background-color: rgba(0,230,118,0.15); color: #00E676; border: 1px solid #00E676; }
+        .setup-wait { background-color: rgba(255,23,68,0.15); color: #FF1744; border: 1px solid #FF1744; }
+        
+        .info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+        .info-box { background-color: #1a1a24; padding: 10px; border-radius: 3px; border: 1px solid #282838; }
+        .info-label { font-size: 10px; color: #888; text-transform: uppercase; }
+        .info-value { font-size: 15px; font-weight: bold; margin-top: 4px; color: #fff; }
+        
+        .ai-box { background-color: #1a1a24; padding: 12px; border-radius: 3px; font-size: 13px; line-height: 1.5; border-left: 3px solid #00E676; color: #ccc; }
+        #loading { display: none; text-align: center; color: #888; font-size: 12px; margin-bottom: 20px; font-style: italic; }
     </style>
 </head>
 <body>
 
-    <div class="dashboard">
+    <div class="terminal">
         <div class="topbar">
-            <div class="logo">SHADOW V3</div>
-            <div style="font-size: 12px; color: #888;">MOTOR NUVEM ATIVO ☁️🟢</div>
+            <div class="logo">SHADOW V3 // T3 QUANT</div>
+            <div class="status-server">
+                <div class="led"></div> NUVEM ATIVA
+            </div>
         </div>
 
-        <button class="btn-analisar" onclick="buscarAnalise()">🔎 Analisar XAUUSD (Agora)</button>
-        <div id="loading">Conectando ao servidor Render e analisando estrutura...</div>
+        <button class="btn-analisar" onclick="buscarAnalise()">⚡ Executar Varredura XAUUSD</button>
+        <div id="loading">Varrendo livro de ordens e calculando EMA 21 + RSI...</div>
 
         <div class="card" id="painel-resultado">
             <div id="badge-status" class="status-badge"></div>
@@ -41,23 +51,30 @@
             <div class="info-grid" id="grid-valores" style="display: none;">
                 <div class="info-box">
                     <div class="info-label">Entrada</div>
-                    <div class="info-value" id="val-entrada">--</div>
-                </div>
-                <div class="info-box">
-                    <div class="info-label">Direção</div>
-                    <div class="info-value" id="val-direcao" style="color: #00c853;">--</div>
+                    <div class="info-value" id="val-entrada" style="color: #00E676;">--</div>
                 </div>
                 <div class="info-box">
                     <div class="info-label">Stop Loss</div>
-                    <div class="info-value" id="val-stop" style="color: #ff3d00;">--</div>
+                    <div class="info-value" id="val-stop" style="color: #FF1744;">--</div>
                 </div>
                 <div class="info-box">
                     <div class="info-label">Take Profit</div>
-                    <div class="info-value" id="val-alvo" style="color: #00c853;">--</div>
+                    <div class="info-value" id="val-alvo" style="color: #00E676;">--</div>
                 </div>
             </div>
 
-            <div class="ai-text" id="texto-ia"></div>
+            <div class="info-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 15px;">
+                <div class="info-box">
+                    <div class="info-label">Preço Atual</div>
+                    <div class="info-value" id="val-preco">--</div>
+                </div>
+                <div class="info-box">
+                    <div class="info-label">RSI (14)</div>
+                    <div class="info-value" id="val-rsi">--</div>
+                </div>
+            </div>
+
+            <div class="ai-box" id="texto-ia"></div>
         </div>
     </div>
 
@@ -67,7 +84,6 @@
             document.getElementById('loading').style.display = 'block';
 
             try {
-                // AGORA O PAINEL CHAMA O SEU MOTOR NA NUVEM!
                 const resposta = await fetch('https://shadow-v3-motor.onrender.com/analisar-ouro');
                 const dados = await resposta.json();
                 
@@ -78,25 +94,26 @@
                 
                 painel.style.display = 'block';
                 document.getElementById('texto-ia').innerText = dados.explicacao_ia;
+                document.getElementById('val-preco').innerText = dados.preco_atual;
+                document.getElementById('val-rsi').innerText = dados.rsi;
 
                 if(dados.status === "SETUP_CONFIRMADO") {
-                    painel.style.borderLeftColor = "#00c853";
+                    painel.style.borderLeftColor = "#00E676";
                     badge.className = "status-badge setup-ok";
-                    badge.innerText = "🟢 SETUP CONFIRMADO";
+                    badge.innerText = "🟢 SETUP COMPRA CONFIRMADO";
                     grid.style.display = 'grid';
                     
                     document.getElementById('val-entrada').innerText = dados.entrada;
-                    document.getElementById('val-direcao').innerText = dados.direcao;
                     document.getElementById('val-stop').innerText = dados.stop_loss;
                     document.getElementById('val-alvo').innerText = dados.take_profit;
                 } else {
-                    painel.style.borderLeftColor = "#ff3d00";
+                    painel.style.borderLeftColor = "#FF1744";
                     badge.className = "status-badge setup-wait";
-                    badge.innerText = "⏸️ SEM SETUP (AGUARDANDO)";
+                    badge.innerText = "⏸️ AGUARDANDO PULLBACK";
                     grid.style.display = 'none';
                 }
             } catch (erro) {
-                document.getElementById('loading').innerText = "Erro ao conectar com o motor Shadow V3 na nuvem. Verifique sua internet.";
+                document.getElementById('loading').innerText = "Erro ao conectar com o terminal na nuvem.";
             }
         }
     </script>

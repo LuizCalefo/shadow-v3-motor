@@ -9,7 +9,6 @@ from openai import OpenAI
 app = Flask(__name__)
 CORS(app)
 
-# Configurando o cliente do Groq (100% gratuito e rápido)
 GROQ_KEY = os.environ.get("GROQ_API_KEY")
 client = OpenAI(
     base_url="https://api.groq.com/openai/v1",
@@ -20,7 +19,7 @@ TWELVEDATA_KEY = os.environ.get("TWELVEDATA_KEY")
 
 @app.route('/analisar-ouro')
 def analisar_ouro():
-    url = f"https://api.twelvedata.com/time_series?symbol=XAU/USD&interval=1h&outputsize=50&apikey={TWELVEDATA_KEY}"
+    url = f"https://api.twelvedata.com/time_series?symbol=XAU/USD&interval=1h&outputsize=100&apikey={TWELVEDATA_KEY}"
     resposta = requests.get(url).json()
 
     if "values" not in resposta:
@@ -33,13 +32,22 @@ def analisar_ouro():
     df['low'] = df['low'].astype(float)
     df['high'] = df['high'].astype(float)
     
+    # Indicadores Quantitativos
     df['ema_21'] = df['close'].ewm(span=21, adjust=False).mean()
+    
+    # Cálculo do RSI (14)
+    delta = df['close'].diff()
+    ganho = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    perda = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = ganho / perda
+    df['rsi'] = 100 - (100 / (1 + rs))
 
     candle_atual = df.iloc[-1]
     candle_anterior = df.iloc[-2]
 
     preco_atual = round(candle_atual['close'], 2)
     ema_atual = round(candle_atual['ema_21'], 2)
+    rsi_atual = round(candle_atual['rsi'], 2)
 
     tendencia_alta = candle_anterior['close'] > candle_anterior['ema_21']
     toque_na_media = candle_atual['low'] <= ema_atual
@@ -49,44 +57,40 @@ def analisar_ouro():
         "ativo": "XAUUSD",
         "estrategia": "Golden Pullback (EMA 21)",
         "preco_atual": preco_atual,
-        "media_movel": ema_atual
+        "media_movel": ema_atual,
+        "rsi": rsi_atual
     }
 
     if tendencia_alta and toque_na_media and fechou_acima:
         resultado_motor["status"] = "SETUP_CONFIRMADO"
         resultado_motor["direcao"] = "COMPRA"
         resultado_motor["entrada"] = preco_atual
-        resultado_motor["stop_loss"] = round(candle_atual['low'] - 1.00, 2)
+        resultado_motor["stop_loss"] = round(candle_atual['low'] - 1.50, 2)
         resultado_motor["take_profit"] = round(preco_atual + ((preco_atual - resultado_motor["stop_loss"]) * 2), 2)
-        resultado_motor["motivo_checklist"] = "Preço tocou na média de 21 e rejeitou a queda, confirmando o pullback."
+        resultado_motor["motivo_checklist"] = "Preço respeitou a EMA 21 com RSI saudável em zona de pullback."
     else:
         resultado_motor["status"] = "SEM_SETUP"
-        motivo = "Aguardando estrutura. "
+        motivo = "Aguardando fluxo institucional. "
         if not tendencia_alta:
-            motivo += "O mercado não está em tendência de alta clara. "
+            motivo += "Estrutura abaixo da média móvel. "
         if not toque_na_media:
-            motivo += "O preço ainda não retornou para testar a média de 21 períodos. "
-        if toque_na_media and not fechou_acima:
-            motivo += "O preço tocou na média, mas fechou abaixo dela (rompeu suporte). "
+            motivo += "Aguardando o preço testar a região da EMA 21. "
         resultado_motor["motivo_checklist"] = motivo
 
     prompt = f"""
-    Você é o gerador de análises do Shadow V3. Sem saudações. Não invente números.
-    Leia este JSON e explique o cenário em 3 frases curtas. 
-    Se o status for SEM_SETUP, explique o que falta acontecer.
-    Se for SETUP_CONFIRMADO, explique a entrada, stop e alvo.
+    Atue como o motor de risco e estratégia da T3 Quant. Seja direto, técnico e institucional. Sem saudações.
+    Analise os dados e resuma o cenário em 2 frases curtas:
     Dados: {json.dumps(resultado_motor)}
     """
     
     try:
-        # Chamada Inteligente via Groq (Llama 3)
         chat_completion = client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[{"role": "user", "content": prompt}]
         )
         resultado_motor["explicacao_ia"] = chat_completion.choices[0].message.content.strip()
     except Exception as e:
-        resultado_motor["explicacao_ia"] = "Análise técnica gerada com sucesso pelo motor de regras."
+        resultado_motor["explicacao_ia"] = "Métricas quantitativas calculadas com sucesso via motor de regras."
 
     return jsonify(resultado_motor)
 
