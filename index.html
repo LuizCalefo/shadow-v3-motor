@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shadow V3 - Mesa de Operações</title>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #0f0f13; color: #ffffff; margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .dashboard { max-width: 600px; width: 100%; }
+        .topbar { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 15px; margin-bottom: 20px; }
+        .logo { font-size: 24px; font-weight: bold; color: #d4af37; letter-spacing: 2px; }
+        .btn-analisar { background-color: #d4af37; color: #000; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; border-radius: 5px; width: 100%; font-size: 16px; margin-bottom: 20px; }
+        .btn-analisar:hover { background-color: #f1c40f; }
+        .card { background-color: #1c1c24; padding: 20px; border-radius: 8px; display: none; border-left: 5px solid #555; }
+        .status-badge { display: inline-block; padding: 5px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; margin-bottom: 15px; }
+        .setup-ok { background-color: #00c853; color: #000; }
+        .setup-wait { background-color: #ff3d00; color: #fff; }
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+        .info-box { background-color: #272732; padding: 10px; border-radius: 5px; }
+        .info-label { font-size: 11px; color: #888; text-transform: uppercase; }
+        .info-value { font-size: 18px; font-weight: bold; margin-top: 5px; }
+        .ai-text { background-color: #272732; padding: 15px; border-radius: 5px; font-size: 14px; line-height: 1.6; border-left: 3px solid #d4af37; font-style: italic; }
+        #loading { display: none; text-align: center; color: #888; font-style: italic; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+
+    <div class="dashboard">
+        <div class="topbar">
+            <div class="logo">SHADOW V3</div>
+            <div style="font-size: 12px; color: #888;">MOTOR NUVEM ATIVO ☁️🟢</div>
+        </div>
+
+        <button class="btn-analisar" onclick="buscarAnalise()">🔎 Analisar XAUUSD (Agora)</button>
+        <div id="loading">Conectando ao servidor Render e analisando estrutura...</div>
+
+        <div class="card" id="painel-resultado">
+            <div id="badge-status" class="status-badge"></div>
+            
+            <div class="info-grid" id="grid-valores" style="display: none;">
+                <div class="info-box">
+                    <div class="info-label">Entrada</div>
+                    <div class="info-value" id="val-entrada">--</div>
+                </div>
+                <div class="info-box">
+                    <div class="info-label">Direção</div>
+                    <div class="info-value" id="val-direcao" style="color: #00c853;">--</div>
+                </div>
+                <div class="info-box">
+                    <div class="info-label">Stop Loss</div>
+                    <div class="info-value" id="val-stop" style="color: #ff3d00;">--</div>
+                </div>
+                <div class="info-box">
+                    <div class="info-label">Take Profit</div>
+                    <div class="info-value" id="val-alvo" style="color: #00c853;">--</div>
+                </div>
+            </div>
+
+            <div class="ai-text" id="texto-ia"></div>
+        </div>
+    </div>
+
+    <script>
+        async function buscarAnalise() {
+            document.getElementById('painel-resultado').style.display = 'none';
+            document.getElementById('loading').style.display = 'block';
+
+            try {
+                // AGORA O PAINEL CHAMA O SEU MOTOR NA NUVEM!
+                const resposta = await fetch('https://shadow-v3-motor.onrender.com/analisar-ouro');
+                const dados = await resposta.json();
+                
+                document.getElementById('loading').style.display = 'none';
+                const painel = document.getElementById('painel-resultado');
+                const badge = document.getElementById('badge-status');
+                const grid = document.getElementById('grid-valores');
+                
+                painel.style.display = 'block';
+                document.getElementById('texto-ia').innerText = dados.explicacao_ia;
+
+                if(dados.status === "SETUP_CONFIRMADO") {
+                    painel.style.borderLeftColor = "#00c853";
+                    badge.className = "status-badge setup-ok";
+                    badge.innerText = "🟢 SETUP CONFIRMADO";
+                    grid.style.display = 'grid';
+                    
+                    document.getElementById('val-entrada').innerText = dados.entrada;
+                    document.getElementById('val-direcao').innerText = dados.direcao;
+                    document.getElementById('val-stop').innerText = dados.stop_loss;
+                    document.getElementById('val-alvo').innerText = dados.take_profit;
+                } else {
+                    painel.style.borderLeftColor = "#ff3d00";
+                    badge.className = "status-badge setup-wait";
+                    badge.innerText = "⏸️ SEM SETUP (AGUARDANDO)";
+                    grid.style.display = 'none';
+                }
+            } catch (erro) {
+                document.getElementById('loading').innerText = "Erro ao conectar com o motor Shadow V3 na nuvem. Verifique sua internet.";
+            }
+        }
+    </script>
+</body>
+</html>
