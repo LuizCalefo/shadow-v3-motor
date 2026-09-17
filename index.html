@@ -22,17 +22,16 @@
         .news-item { background: #1a1a24; padding: 6px 12px; border-radius: 3px; font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 8px; border: 1px solid #1f1f2e; }
         .news-time { color: #4facfe; font-weight: bold; }
         
-        .control-panel { background: #121218; padding: 15px; border-radius: 4px; border: 1px solid #1f1f2e; margin-bottom: 20px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
-        .control-panel label { font-size: 12px; color: #888; text-transform: uppercase; }
-        .select-strat { background: #1a1a24; color: #00E676; border: 1px solid #282838; padding: 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 13px; }
+        .control-panel { background: #121218; padding: 15px; border-radius: 4px; border: 1px solid #1f1f2e; margin-bottom: 20px; display: flex; gap: 15px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+        .omni-title { font-weight: bold; color: #00E676; text-transform: uppercase; font-size: 13px; letter-spacing: 1px; flex-grow: 1; }
         
-        .btn-analisar { background-color: #00E676; color: #000; border: none; padding: 10px 15px; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 13px; text-transform: uppercase; transition: 0.2s; flex-grow: 1; }
+        .btn-analisar { background-color: #00E676; color: #000; border: none; padding: 10px 15px; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 13px; text-transform: uppercase; transition: 0.2s; }
         .btn-analisar:hover { background-color: #00c853; box-shadow: 0 0 10px rgba(0,230,118,0.4); }
         .btn-aquecer { background-color: #ff9800; color: #000; border: none; padding: 10px 15px; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 13px; text-transform: uppercase; transition: 0.2s; }
-        .btn-robo { background-color: #8e44ad; color: #fff; border: none; padding: 10px 15px; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 13px; text-transform: uppercase; transition: 0.2s; box-shadow: 0 0 10px rgba(142,68,173,0.4); }
+        .btn-robo { background-color: #8e44ad; color: #fff; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 13px; text-transform: uppercase; transition: 0.2s; box-shadow: 0 0 10px rgba(142,68,173,0.4); }
         .btn-robo:hover { background-color: #9b59b6; }
-        .btn-robo.ativo { background-color: #e74c3c; box-shadow: 0 0 10px rgba(231,76,60,0.6); animation: pulsarRobo 2s infinite; }
-        @keyframes pulsarRobo { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+        .btn-robo.ativo { background-color: #e74c3c; box-shadow: 0 0 15px rgba(231,76,60,0.6); animation: pulsarRobo 1.5s infinite; }
+        @keyframes pulsarRobo { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
 
         .grid-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         @media (max-width: 900px) { .grid-layout { grid-template-columns: 1fr; } }
@@ -49,7 +48,6 @@
         
         .ai-box { background-color: #1a1a24; padding: 12px; border-radius: 3px; font-size: 12px; line-height: 1.5; border-left: 3px solid #00E676; color: #ccc; white-space: pre-line; margin-bottom: 10px; }
         
-        /* NOVO MÓDULO DE VOLUME E ONDAS */
         .vol-box { background-color: #1a1a24; padding: 12px; border-radius: 3px; border: 1px solid #282838; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;}
         .vol-label { font-size: 11px; color: #888; text-transform: uppercase; font-weight: bold; }
         .vol-value { font-size: 13px; font-weight: bold; color: #4facfe; }
@@ -74,22 +72,15 @@
         <div class="news-bar">
             <div class="news-header">📰 RADAR MACROECONÔMICO (USD / OURO)</div>
             <div class="news-list" id="news-container">
-                <div style="color: #888; font-size: 12px;">Buscando agenda com a Inteligência Artificial...</div>
+                <div style="color: #888; font-size: 12px;">Carregando agenda...</div>
             </div>
         </div>
 
         <div class="control-panel">
-            <div>
-                <label>Estratégia Monitorada:</label><br>
-                <select id="estrategiaSelect" class="select-strat" onchange="atualizarGrafico()">
-                    <option value="pullback">1. Golden Pullback (1 Hora)</option>
-                    <option value="scalper">2. Scalper Rápido (15 Minutos)</option>
-                    <option value="breakout">3. Rompimento de Máxima (1 Hora)</option>
-                </select>
-            </div>
+            <div class="omni-title">⚡ Inteligência Omni-Estratégia Automática Ativa</div>
             <button class="btn-robo" id="btn-robo" onclick="toggleRobo()">🤖 Ligar Auto-Scanner</button>
-            <button class="btn-aquecer" onclick="aquecerMotor()">🔥 Aquecer Motor</button>
-            <button class="btn-analisar" id="btn-manual" onclick="buscarAnalise(false)">⚡ Análise Manual</button>
+            <button class="btn-aquecer" onclick="aquecerMotor()">🔥 Aquecer</button>
+            <button class="btn-analisar" onclick="buscarAnalise(false)">Analisar Agora</button>
         </div>
 
         <div id="loading">Operação em andamento...</div>
@@ -136,7 +127,6 @@
                         </div>
                     </div>
 
-                    <!-- NOVO MÓDULO VISUAL: VOLUME E ONDAS -->
                     <div class="vol-box">
                         <div>
                             <div class="vol-label">📊 Nó de Alto Volume (POC)</div>
@@ -153,10 +143,12 @@
             <div>
                 <div class="card" style="display: block; padding: 0;">
                     <div style="padding: 10px; font-size: 11px; background: #1a1a24; border-bottom: 1px solid #1f1f2e; color: #888; display: flex; justify-content: space-between;">
-                        <span>📈 GRÁFICO: XAUUSD</span>
-                        <span id="chart-timeframe-label" style="color: #00E676; font-weight:bold;">1 HORA</span>
+                        <span>📈 GRÁFICO OMNI: XAUUSD</span>
+                        <span style="color: #00E676; font-weight:bold;">15 MIN</span>
                     </div>
-                    <div class="chart-container" id="chart-box"></div>
+                    <div class="chart-container">
+                        <iframe scrolling="no" allowtransparency="true" frameborder="0" src="https://www.tradingview-widget.com/embed-widget/advanced-chart/?locale=br#%7B%22autosize%22%3Atrue%2C%22symbol%22%3A%22OANDA%3AXAUUSD%22%2C%22interval%22%3A%2215%22%2C%22timezone%22%3A%22America%2FSao_Paulo%22%2C%22theme%22%3A%22dark%22%2C%22style%22%3A%221%22%2C%22locale%22%3A%22br%22%2C%22hide_top_toolbar%22%3Afalse%2C%22allow_symbol_change%22%3A%22false%22%2C%22calendar%22%3Afalse%2C%22support_host%22%3A%22https%3A%22%7D" style="width:100%; height:100%;"></iframe>
+                    </div>
                 </div>
             </div>
         </div>
@@ -180,8 +172,8 @@
 
         function dispararNotificacaoInicio() {
             if (Notification.permission === "granted") {
-                new Notification('🤖 AUTO-SCANNER ATIVADO', {
-                    body: 'O Trading Shadow está monitorando o gráfico. O motor permanecerá acordado. Você será avisado quando houver uma entrada!',
+                new Notification('🤖 AUTO-SCANNER LIGADO', {
+                    body: 'O Motor Omni-Estratégia está online. Você será avisado assim que houver um gatilho de entrada no Ouro!',
                     icon: 'https://cdn-icons-png.flaticon.com/512/2933/2933116.png'
                 });
             }
@@ -192,7 +184,7 @@
             
             if (Notification.permission === "granted") {
                 const notificacao = new Notification('🟢 ALERTA TRADING SHADOW', {
-                    body: `Estratégia: ${estrategia}\nO robô detectou um gatilho e validou a estrutura!\n\nClique aqui para revelar os alvos exatos.`,
+                    body: `Setup validado: ${estrategia}!\n\nClique para abrir a mesa e ver a Entrada, Alvos e Stop.`,
                     icon: 'https://cdn-icons-png.flaticon.com/512/2933/2933116.png',
                     requireInteraction: true 
                 });
@@ -214,14 +206,17 @@
                 btnRobo.classList.add('ativo');
                 btnRobo.innerText = "⏹️ Desligar Auto-Scanner";
                 
-                setTimeout(dispararNotificacaoInicio, 1000);
+                setTimeout(dispararNotificacaoInicio, 500);
                 
                 carregarNoticias();
                 buscarAnalise(true);
                 
+                // Varre o mercado a cada 3 minutos
                 roboInterval = setInterval(() => buscarAnalise(true), 180000);
+                
+                // Impede o servidor de dormir
                 pingAntiSono = setInterval(() => {
-                    fetch('https://shadow-v3-motor.onrender.com/ping').catch(e => console.log("Ping silencioso falhou"));
+                    fetch('https://shadow-v3-motor.onrender.com/ping').catch(e => console.log("Ping silencioso"));
                 }, 120000);
                 
             } else {
@@ -235,13 +230,10 @@
         }
 
         async function carregarNoticias() {
-            document.getElementById('news-container').innerHTML = '<div style="color: #888; font-size: 12px;">Sincronizando calendário com o servidor...</div>';
             try {
                 const res = await fetch('https://shadow-v3-motor.onrender.com/noticias');
                 const noticias = await res.json();
                 
-                if(noticias.erro || noticias.length === 0) throw new Error("Sem dados");
-
                 let html = '';
                 noticias.forEach(n => {
                     let fogos = '🔥'.repeat(n.impacto);
@@ -249,27 +241,18 @@
                 });
                 document.getElementById('news-container').innerHTML = html;
             } catch (e) {
-                document.getElementById('news-container').innerHTML = '<div class="news-item" style="border-left-color: #FF1744;">⚠️ Agenda indisponível (Motor recém acordado).</div>';
+                document.getElementById('news-container').innerHTML = '<div class="news-item" style="border-left-color: #FF1744;">⚠️ Agenda indisponível (Aguardando motor).</div>';
             }
         }
 
-        function atualizarGrafico() {
-            const strat = document.getElementById('estrategiaSelect').value;
-            const tf = (strat === 'scalper') ? "15" : "60";
-            const label = (strat === 'scalper') ? "15 MINUTOS" : "1 HORA";
-            document.getElementById('chart-timeframe-label').innerText = label;
-            document.getElementById('chart-box').innerHTML = `<iframe scrolling="no" allowtransparency="true" frameborder="0" src="https://www.tradingview-widget.com/embed-widget/advanced-chart/?locale=br#%7B%22autosize%22%3Atrue%2C%22symbol%22%3A%22OANDA%3AXAUUSD%22%2C%22interval%22%3A%22${tf}%22%2C%22timezone%22%3A%22America%2FSao_Paulo%22%2C%22theme%22%3A%22dark%22%2C%22style%22%3A%221%22%2C%22locale%22%3A%22br%22%2C%22hide_top_toolbar%22%3Afalse%2C%22allow_symbol_change%22%3A%22false%22%2C%22calendar%22%3Afalse%2C%22support_host%22%3A%22https%3A%22%7D" style="width:100%; height:100%;"></iframe>`;
-        }
-
         window.onload = () => {
-            atualizarGrafico();
             carregarNoticias();
         };
 
         async function aquecerMotor() {
             const loading = document.getElementById('loading');
             loading.style.display = 'block';
-            loading.innerText = "🔥 Acendendo os motores e rastreando liquidez...";
+            loading.innerText = "🔥 Acendendo os motores...";
             try {
                 const resposta = await fetch('https://shadow-v3-motor.onrender.com/ping');
                 const dados = await resposta.json();
@@ -278,7 +261,7 @@
                     document.getElementById('servidorLed').classList.add('ativo');
                     document.getElementById('statusTexto').innerText = "MOTOR ATIVO";
                     carregarNoticias();
-                    alert("Motor aquecido! Estrutura de mercado pronta para análise.");
+                    alert("Motor Omni-Estratégia 100% Aquecido!");
                 }
             } catch (erro) {
                 loading.innerText = "Erro ao aquecer. Tente novamente.";
@@ -286,16 +269,15 @@
         }
 
         async function buscarAnalise(silencioso = false) {
-            const estrategia = document.getElementById('estrategiaSelect').value;
-            
             if (!silencioso) {
                 document.getElementById('painel-resultado').style.display = 'none';
                 document.getElementById('loading').style.display = 'block';
-                document.getElementById('loading').innerText = "Mapeando Ondas de Elliott e Volume Profile...";
+                document.getElementById('loading').innerText = "Processando estrutura Omni-Estratégia...";
             }
 
             try {
-                const resposta = await fetch(`https://shadow-v3-motor.onrender.com/analisar-ouro?estrategia=${estrategia}`);
+                // A chamada agora não precisa mais do parâmetro "estrategia"
+                const resposta = await fetch('https://shadow-v3-motor.onrender.com/analisar-ouro');
                 const dados = await resposta.json();
                 
                 if (!silencioso) document.getElementById('loading').style.display = 'none';
@@ -311,7 +293,6 @@
                 document.getElementById('val-preco').innerText = dados.preco_atual;
                 document.getElementById('val-dxy').innerText = dados.dxy_atual;
                 
-                // Atualiza o dado de Volume Profile
                 if(dados.poc_volume) {
                     document.getElementById('val-poc').innerText = dados.poc_volume;
                 }
@@ -320,7 +301,7 @@
                     painel.style.borderLeftColor = "#00E676";
                     painel.classList.add('painel-destaque'); 
                     badge.className = "status-badge setup-ok";
-                    badge.innerText = `🟢 ALERTA DE ENTRADA (${dados.estrategia_ativa})`;
+                    badge.innerText = `🟢 ALERTA: ${dados.estrategia_ativa}`;
                     
                     document.getElementById('grid-entrada').style.display = 'grid';
                     document.getElementById('grid-alvos').style.display = 'grid';
