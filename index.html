@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shadow V3 // T3 Quant Master Terminal</title>
+    <title>Trading Shadow</title>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; font-family: 'JetBrains Mono', monospace; }
         body { background-color: #050507; color: #e0e0e0; margin: 0; padding: 15px; display: flex; justify-content: center; }
-        .terminal { max-width: 1000px; width: 100%; border: 1px solid #1f1f2e; background: #0c0c10; padding: 20px; border-radius: 6px; box-shadow: 0 0 25px rgba(0,0,0,0.9); }
+        .terminal { max-width: 1100px; width: 100%; border: 1px solid #1f1f2e; background: #0c0c10; padding: 20px; border-radius: 6px; box-shadow: 0 0 25px rgba(0,0,0,0.9); }
         .topbar { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1f1f2e; padding-bottom: 12px; margin-bottom: 20px; }
-        .logo { font-size: 18px; font-weight: bold; color: #00E676; letter-spacing: 1px; }
+        .logo { font-size: 20px; font-weight: bold; color: #00E676; letter-spacing: 2px; }
         .status-server { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #888; }
         .led { width: 8px; height: 8px; background-color: #FF1744; border-radius: 50%; box-shadow: 0 0 8px #FF1744; transition: 0.3s; }
         .led.ativo { background-color: #00E676; box-shadow: 0 0 8px #00E676; animation: pulsar 1.5s infinite; }
@@ -18,87 +18,88 @@
         
         .control-panel { background: #121218; padding: 15px; border-radius: 4px; border: 1px solid #1f1f2e; margin-bottom: 20px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
         .control-panel label { font-size: 12px; color: #888; text-transform: uppercase; }
-        .select-strat { background: #1a1a24; color: #00E676; border: 1px solid #282838; padding: 10px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 13px; }
+        .select-strat { background: #1a1a24; color: #00E676; border: 1px solid #282838; padding: 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 13px; }
         
-        .btn-analisar { background-color: #00E676; color: #000; border: none; padding: 10px 15px; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 13px; text-transform: uppercase; transition: 0.2s; }
+        .btn-analisar { background-color: #00E676; color: #000; border: none; padding: 10px 15px; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 13px; text-transform: uppercase; transition: 0.2s; flex-grow: 1; }
         .btn-analisar:hover { background-color: #00c853; box-shadow: 0 0 10px rgba(0,230,118,0.4); }
-
         .btn-aquecer { background-color: #ff9800; color: #000; border: none; padding: 10px 15px; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 13px; text-transform: uppercase; transition: 0.2s; }
-        .btn-aquecer:hover { background-color: #ffa726; box-shadow: 0 0 10px rgba(255,152,0,0.4); }
 
         .grid-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        @media (max-width: 800px) { .grid-layout { grid-template-columns: 1fr; } }
+        @media (max-width: 900px) { .grid-layout { grid-template-columns: 1fr; } }
 
         .card { background-color: #121218; padding: 15px; border-radius: 4px; border: 1px solid #1f1f2e; margin-bottom: 15px; }
         .status-badge { display: inline-block; padding: 4px 10px; border-radius: 3px; font-size: 11px; font-weight: bold; margin-bottom: 10px; letter-spacing: 1px; }
         .setup-ok { background-color: rgba(0,230,118,0.15); color: #00E676; border: 1px solid #00E676; }
         .setup-wait { background-color: rgba(255,23,68,0.15); color: #FF1744; border: 1px solid #FF1744; }
         
-        .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 15px; }
-        .info-box { background-color: #1a1a24; padding: 10px; border-radius: 3px; border: 1px solid #282838; }
-        .info-label { font-size: 10px; color: #888; text-transform: uppercase; }
-        .info-value { font-size: 14px; font-weight: bold; margin-top: 4px; color: #fff; }
+        .info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px; }
+        .info-box { background-color: #1a1a24; padding: 10px; border-radius: 3px; border: 1px solid #282838; text-align: center; }
+        .info-label { font-size: 10px; color: #888; text-transform: uppercase; margin-bottom: 4px;}
+        .info-value { font-size: 14px; font-weight: bold; color: #fff; }
         
-        .ai-box { background-color: #1a1a24; padding: 12px; border-radius: 3px; font-size: 12px; line-height: 1.5; border-left: 3px solid #00E676; color: #ccc; white-space: pre-line; }
+        .ai-box { background-color: #1a1a24; padding: 12px; border-radius: 3px; font-size: 12px; line-height: 1.5; border-left: 3px solid #00E676; color: #ccc; white-space: pre-line; margin-bottom: 10px; }
+        .news-box { background-color: #1a1a24; padding: 12px; border-radius: 3px; font-size: 12px; line-height: 1.5; border-left: 3px solid #ff9800; color: #ccc; white-space: pre-line; }
+        
         #loading { display: none; text-align: center; color: #ff9800; font-size: 12px; margin-bottom: 20px; font-style: italic; }
-        .chart-container { width: 100%; height: 400px; background: #121218; border-radius: 4px; border: 1px solid #1f1f2e; overflow: hidden; }
+        .chart-container { width: 100%; height: 550px; background: #121218; border-radius: 4px; border: 1px solid #1f1f2e; overflow: hidden; }
+        .footer { text-align: center; color: #444; font-size: 12px; margin-top: 25px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; }
     </style>
 </head>
 <body>
 
     <div class="terminal">
         <div class="topbar">
-            <div class="logo">SHADOW V3 // T3 QUANT MASTER</div>
+            <div class="logo">TRADING SHADOW</div>
             <div class="status-server">
                 <div class="led" id="servidorLed"></div> <span id="statusTexto">MOTOR DORMINDO</span>
             </div>
         </div>
 
-        <!-- Painel de Controle e Estratégia -->
         <div class="control-panel">
             <div>
-                <label>Estratégia:</label><br>
-                <select id="estrategiaSelect" class="select-strat">
-                    <option value="pullback">1. Golden Pullback (EMA 21)</option>
-                    <option value="breakout">2. Rompimento de Máxima</option>
-                    <option value="smart_money">3. Smart Money / Liquidez</option>
+                <label>Selecione a Estratégia:</label><br>
+                <select id="estrategiaSelect" class="select-strat" onchange="atualizarGrafico()">
+                    <option value="pullback">1. Golden Pullback (1 Hora)</option>
+                    <option value="scalper">2. Scalper Rápido (15 Minutos)</option>
+                    <option value="breakout">3. Rompimento de Máxima (1 Hora)</option>
                 </select>
             </div>
             <button class="btn-aquecer" onclick="aquecerMotor()">🔥 Aquecer Motor</button>
-            <button class="btn-analisar" onclick="buscarAnalise()">⚡ Varredura Tática</button>
+            <button class="btn-analisar" onclick="buscarAnalise()">⚡ Analisar Mercado</button>
         </div>
 
-        <div id="loading">Acordando o motor na nuvem e processando dados...</div>
+        <div id="loading">Operação em andamento...</div>
 
         <div class="grid-layout">
-            <!-- Coluna Esquerda -->
+            <!-- Esquerda: Dados -->
             <div>
                 <div class="card" id="painel-resultado" style="display: none;">
                     <div id="badge-status" class="status-badge"></div>
                     
-                    <div class="info-grid" id="grid-valores" style="display: none;">
+                    <div class="info-grid" id="grid-entrada" style="display: none; grid-template-columns: 1fr 1fr;">
                         <div class="info-box">
-                            <div class="info-label">Preço de Entrada</div>
+                            <div class="info-label">Preço Entrada</div>
                             <div class="info-value" id="val-entrada" style="color: #00E676;">--</div>
                         </div>
                         <div class="info-box">
-                            <div class="info-label">Take Profit (Alvo)</div>
-                            <div class="info-value" id="val-alvo" style="color: #00E676;">--</div>
-                        </div>
-                        <div class="info-box" style="grid-column: span 2;">
-                            <div class="info-label">Stop Loss (Proteção)</div>
+                            <div class="info-label">Stop Loss</div>
                             <div class="info-value" id="val-stop" style="color: #FF1744;">--</div>
                         </div>
                     </div>
 
-                    <div class="info-grid">
+                    <!-- Múltiplos Alvos -->
+                    <div class="info-grid" id="grid-alvos" style="display: none;">
                         <div class="info-box">
-                            <div class="info-label">Resistência (Liquidez)</div>
-                            <div class="info-value" id="val-res" style="color: #FF1744;">--</div>
+                            <div class="info-label">Alvo 1 (TP1)</div>
+                            <div class="info-value" id="val-tp1" style="color: #00E676;">--</div>
                         </div>
                         <div class="info-box">
-                            <div class="info-label">Suporte (Liquidez)</div>
-                            <div class="info-value" id="val-sup" style="color: #00E676;">--</div>
+                            <div class="info-label">Alvo 2 (TP2)</div>
+                            <div class="info-value" id="val-tp2" style="color: #00E676;">--</div>
+                        </div>
+                        <div class="info-box">
+                            <div class="info-label">Alvo Final (TP3)</div>
+                            <div class="info-value" id="val-tp3" style="color: #00E676;">--</div>
                         </div>
                     </div>
 
@@ -113,30 +114,51 @@
                         </div>
                     </div>
 
-                    <div style="font-size: 11px; color: #00E676; text-transform: uppercase; margin-top: 15px; font-weight: bold;">🧠 Raciocínio Tático & Notícias Macro:</div>
+                    <div style="font-size: 11px; color: #00E676; text-transform: uppercase; margin-top: 15px; font-weight: bold;">🧠 Raciocínio Tático:</div>
                     <div class="ai-box" id="texto-ia"></div>
+
+                    <div style="font-size: 11px; color: #ff9800; text-transform: uppercase; margin-top: 15px; font-weight: bold;">📰 Radar de Notícias Macro (Ouro/Dólar):</div>
+                    <div class="news-box" id="texto-noticias"></div>
                 </div>
             </div>
 
-            <!-- Coluna Direita: Gráfico do TradingView -->
+            <!-- Direita: Gráfico Dinâmico -->
             <div>
                 <div class="card" style="display: block; padding: 0;">
-                    <div style="padding: 10px; font-size: 11px; background: #1a1a24; border-bottom: 1px solid #1f1f2e; color: #888;">
-                        📈 GRÁFICO AO VIVO: XAUUSD (OURO / DÓLAR)
+                    <div style="padding: 10px; font-size: 11px; background: #1a1a24; border-bottom: 1px solid #1f1f2e; color: #888; display: flex; justify-content: space-between;">
+                        <span>📈 GRÁFICO: XAUUSD (Use a barra lateral para marcar Entradas e TPs)</span>
+                        <span id="chart-timeframe-label" style="color: #00E676; font-weight:bold;">1 HORA</span>
                     </div>
-                    <div class="chart-container">
-                        <iframe scrolling="no" allowtransparency="true" frameborder="0" src="https://www.tradingview-widget.com/embed-widget/advanced-chart/?locale=br#%7B%22autosize%22%3Atrue%2C%22symbol%22%3A%22OANDA%3AXAUUSD%22%2C%22interval%22%3A%2260%22%2C%22timezone%22%3A%22America%2FSao_Paulo%22%2C%22theme%22%3A%22dark%22%2C%22style%22%3A%221%22%2C%22locale%22%3A%22br%22%2C%22hide_top_toolbar%22%3Afalse%2C%22allow_symbol_change%22%3A%22false%22%2C%22calendar%22%3Afalse%2C%22support_host%22%3A%22https%3A%22%7D" style="width:100%; height:100%;"></iframe>
+                    <div class="chart-container" id="chart-box">
+                        <!-- O iframe é injetado via JS para mudar o tempo do gráfico -->
                     </div>
                 </div>
             </div>
         </div>
+
+        <div class="footer">Feita por Lemos</div>
     </div>
 
     <script>
+        // Função para atualizar o Gráfico de acordo com a estratégia (1h ou 15m)
+        function atualizarGrafico() {
+            const strat = document.getElementById('estrategiaSelect').value;
+            const tf = (strat === 'scalper') ? "15" : "60";
+            const label = (strat === 'scalper') ? "15 MINUTOS" : "1 HORA";
+            
+            document.getElementById('chart-timeframe-label').innerText = label;
+            document.getElementById('chart-box').innerHTML = `
+                <iframe scrolling="no" allowtransparency="true" frameborder="0" src="https://www.tradingview-widget.com/embed-widget/advanced-chart/?locale=br#%7B%22autosize%22%3Atrue%2C%22symbol%22%3A%22OANDA%3AXAUUSD%22%2C%22interval%22%3A%22${tf}%22%2C%22timezone%22%3A%22America%2FSao_Paulo%22%2C%22theme%22%3A%22dark%22%2C%22style%22%3A%221%22%2C%22locale%22%3A%22br%22%2C%22hide_top_toolbar%22%3Afalse%2C%22allow_symbol_change%22%3A%22false%22%2C%22calendar%22%3Afalse%2C%22support_host%22%3A%22https%3A%22%7D" style="width:100%; height:100%;"></iframe>
+            `;
+        }
+
+        // Inicia com o gráfico padrão
+        window.onload = atualizarGrafico;
+
         async function aquecerMotor() {
             const loading = document.getElementById('loading');
             loading.style.display = 'block';
-            loading.innerText = "🔥 Acendendo os motores na nuvem (isso pode levar alguns segundos se estiver dormindo)...";
+            loading.innerText = "🔥 Acendendo os motores (aguarde uns segundos se estiver dormindo)...";
 
             try {
                 const resposta = await fetch('https://shadow-v3-motor.onrender.com/ping');
@@ -145,11 +167,11 @@
                 loading.style.display = 'none';
                 if(dados.status === "motor_aquecido") {
                     document.getElementById('servidorLed').classList.add('ativo');
-                    document.getElementById('statusTexto').innerText = "MOTOR ATIVO & AQUECIDO";
-                    alert("🔥 Motor aquecido com sucesso! O sistema está pronto para varreduras instantâneas.");
+                    document.getElementById('statusTexto').innerText = "MOTOR ATIVO";
+                    alert("Motor aquecido! Pronto para o trading.");
                 }
             } catch (erro) {
-                loading.innerText = "Erro ao aquecer o motor. Tente novamente em instantes.";
+                loading.innerText = "Erro ao aquecer. Tente novamente.";
             }
         }
 
@@ -157,47 +179,48 @@
             const estrategia = document.getElementById('estrategiaSelect').value;
             document.getElementById('painel-resultado').style.display = 'none';
             document.getElementById('loading').style.display = 'block';
-            document.getElementById('loading').innerText = "Executando varredura tática e cruzando dados...";
+            document.getElementById('loading').innerText = "Analisando fluxo institucional e notícias...";
 
             try {
                 const resposta = await fetch(`https://shadow-v3-motor.onrender.com/analisar-ouro?estrategia=${estrategia}`);
                 const dados = await resposta.json();
                 
                 document.getElementById('loading').style.display = 'none';
-                
-                // Se respondeu, garante que o led verde acende
                 document.getElementById('servidorLed').classList.add('ativo');
                 document.getElementById('statusTexto').innerText = "MOTOR ATIVO";
 
                 const painel = document.getElementById('painel-resultado');
                 const badge = document.getElementById('badge-status');
-                const grid = document.getElementById('grid-valores');
                 
                 painel.style.display = 'block';
                 document.getElementById('texto-ia').innerText = dados.explicacao_ia;
+                document.getElementById('texto-noticias').innerText = dados.noticias_macro;
                 document.getElementById('val-preco').innerText = dados.preco_atual;
                 document.getElementById('val-dxy').innerText = dados.dxy_atual;
-                document.getElementById('val-res').innerText = dados.liquidez_superior;
-                document.getElementById('val-sup').innerText = dados.liquidez_inferior;
 
                 if(dados.status === "SETUP_CONFIRMADO") {
                     painel.style.borderLeftColor = "#00E676";
                     badge.className = "status-badge setup-ok";
-                    badge.innerText = `🟢 SETUP CONFIRMADO (${dados.estrategia_ativa})`;
-                    grid.style.display = 'grid';
+                    badge.innerText = `🟢 ALERTA DE ENTRADA (${dados.estrategia_ativa})`;
+                    
+                    document.getElementById('grid-entrada').style.display = 'grid';
+                    document.getElementById('grid-alvos').style.display = 'grid';
                     
                     document.getElementById('val-entrada').innerText = dados.entrada;
                     document.getElementById('val-stop').innerText = dados.stop_loss;
-                    document.getElementById('val-alvo').innerText = dados.take_profit;
+                    document.getElementById('val-tp1').innerText = dados.tp1;
+                    document.getElementById('val-tp2').innerText = dados.tp2;
+                    document.getElementById('val-tp3').innerText = dados.tp3;
                 } else {
                     painel.style.borderLeftColor = "#FF1744";
                     badge.className = "status-badge setup-wait";
-                    badge.innerText = `⏸️ AGUARDANDO GATILHO (${dados.estrategia_ativa})`;
-                    grid.style.display = 'none';
+                    badge.innerText = `⏸️ FORA DA ZONA DE ENTRADA (${dados.estrategia_ativa})`;
+                    
+                    document.getElementById('grid-entrada').style.display = 'none';
+                    document.getElementById('grid-alvos').style.display = 'none';
                 }
             } catch (erro) {
-                document.getElementById('loading').style.display = 'block';
-                document.getElementById('loading').innerText = "O motor estava dormindo. Clique em '🔥 Aquecer Motor' primeiro!";
+                document.getElementById('loading').innerText = "Motor dormindo. Use '🔥 Aquecer Motor'.";
             }
         }
     </script>
