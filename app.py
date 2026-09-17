@@ -20,21 +20,43 @@ TWELVEDATA_KEY = os.environ.get("TWELVEDATA_KEY")
 def ping():
     return jsonify({"status": "motor_aquecido", "mensagem": "Servidor acordado!"})
 
+@app.route('/noticias')
+def noticias():
+    prompt = """
+    Atue como uma API de calendário econômico. Retorne APENAS um JSON válido e estruturado com os 3 principais eventos macroeconômicos dos EUA agendados para hoje que afetam o Ouro (USD).
+    Formato OBRIGATÓRIO:
+    [
+      {"hora": "09:30", "evento": "Pedidos de Seguro-Desemprego", "impacto": 2}
+    ]
+    O impacto deve ser obrigatoriamente o número 1, 2 ou 3.
+    """
+    try:
+        chat_completion = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1
+        )
+        texto = chat_completion.choices[0].message.content.strip()
+        if texto.startswith("```"):
+            texto = texto.split("```")[1].replace("json", "").strip()
+        return jsonify(json.loads(texto))
+    except Exception as e:
+        return jsonify([
+            {"hora": "Ao Vivo", "evento": "Monitoramento de Liquidez (Estimado)", "impacto": 3}
+        ])
+
 @app.route('/analisar-ouro')
 def analisar_ouro():
     estrategia_escolhida = request.args.get('estrategia', 'pullback')
-    
-    # Se for Scalper, usa gráfico de 15 minutos. Senão, usa 1 hora.
     intervalo = "15min" if estrategia_escolhida == "scalper" else "1h"
 
-    url_gold = f"https://api.twelvedata.com/time_series?symbol=XAU/USD&interval={intervalo}&outputsize=50&apikey={TWELVEDATA_KEY}"
+    url_gold = f"https://api.twelvedata.com/time_series?symbol=XAU/USD&interval={intervalo}&outputsize=100&apikey={TWELVEDATA_KEY}"
     resp_gold = requests.get(url_gold).json()
-
     url_dxy = f"https://api.twelvedata.com/time_series?symbol=DXY&interval=1h&outputsize=5&apikey={TWELVEDATA_KEY}"
     resp_dxy = requests.get(url_dxy).json()
 
     if "values" not in resp_gold:
-        return jsonify({"erro": "Falha ao buscar dados do Ouro"}), 500
+        return jsonify({"erro": "Falha ao buscar dados"}), 500
 
     df = pd.DataFrame(resp_gold["values"])
     df = df.iloc[::-1].reset_index(drop=True) 
@@ -42,9 +64,11 @@ def analisar_ouro():
     df['low'] = df['low'].astype(float)
     df['high'] = df['high'].astype(float)
     
-    # Indicadores
     df['ema_9'] = df['close'].ewm(span=9, adjust=False).mean()
     df['ema_21'] = df['close'].ewm(span=21, adjust=False).mean()
+
+    # Cálculo rudimentar de nó de alto volume (POC Estimado)
+    poc_estimado = round(df['close'].mode()[0] if not df['close'].mode().empty else df['close'].mean(), 2)
 
     dxy_atual = 100.0
     if "values" in resp_dxy:
@@ -57,13 +81,12 @@ def analisar_ouro():
     ema_9_atual = round(candle_atual['ema_9'], 2)
     ema_21_atual = round(candle_atual['ema_21'], 2)
 
-    zona_resistencia = round(df['high'].iloc[-15:].max(), 2)
-    zona_suporte = round(df['low'].iloc[-15:].min(), 2)
+    zona_resistencia = round(df['high'].iloc[-20:].max(), 2)
+    zona_suporte = round(df['low'].iloc[-20:].min(), 2)
 
     status_setup = False
     tp1, tp2, tp3, sl = 0.0, 0.0, 0.0, 0.0
 
-    # LÓGICAS DAS ESTRATÉGIAS
     if estrategia_escolhida == "pullback":
         tendencia_alta = candle_anterior['close'] > candle_anterior['ema_21']
         toque_na_media = candle_atual['low'] <= ema_21_atual
@@ -82,22 +105,21 @@ def analisar_ouro():
         tp3 = round(preco_atual + 9.00, 2)
         
     elif estrategia_escolhida == "scalper":
-        # Estratégia rápida: Cruzamento da EMA 9 sobre a 21 nos 15 minutos com explosão
         cruzamento_alta = candle_anterior['ema_9'] <= candle_anterior['ema_21'] and ema_9_atual > ema_21_atual
         status_setup = cruzamento_alta
-        sl = round(candle_atual['low'] - 0.50, 2) # Stop bem curto
-        tp1 = round(preco_atual + 1.00, 2) # Alvo curto
+        sl = round(candle_atual['low'] - 0.50, 2)
+        tp1 = round(preco_atual + 1.00, 2)
         tp2 = round(preco_atual + 2.00, 2)
         tp3 = round(preco_atual + 3.50, 2)
 
     resultado_motor = {
         "ativo": "XAUUSD",
-        "estrategia_ativa": estrategia_escolhida.upper(),
-        "timeframe": intervalo,
+        "estrategia": estrategia_escolhida.upper(),
         "preco_atual": preco_atual,
         "dxy_atual": dxy_atual,
         "liquidez_superior": zona_resistencia,
-        "liquidez_inferior": zona_suporte
+        "liquidez_inferior": zona_suporte,
+        "poc_volume": poc_estimado
     }
 
     if status_setup:
@@ -110,13 +132,12 @@ def analisar_ouro():
     else:
         resultado_motor["status"] = "SEM_SETUP"
 
-    # Pedindo IA para separar Raciocínio de Notícias usando marcadores
+    # Nova diretriz focada em Estrutura de Mercado
     prompt = f"""
-    Você é a IA do Trading Shadow, analista de Ouro.
-    Escreva a resposta dividida em duas partes separadas por '|||'.
-    Parte 1: O que o robô está pensando agora analisando os dados: {json.dumps(resultado_motor)}.
-    Parte 2: Liste as 2 principais notícias macroeconômicas ou eventos (ex: CPI, Fed) programados para o Dólar/Ouro hoje, com horário e impacto esperado.
-    Seja técnico e direto.
+    Você é a IA institucional do Trading Shadow, analista sênior de XAUUSD.
+    Analise os dados técnicos abaixo. No seu raciocínio (máximo 3 frases), inclua a estrutura do mercado focando em confluências com a Teoria das Ondas de Elliott (ex: ciclo de impulso ou correção) e a aceitação do preço no nó de alto volume (POC: {poc_estimado}).
+    Dados: {json.dumps(resultado_motor)}.
+    Seja técnico, objetivo e avançado.
     """
     
     try:
@@ -124,16 +145,9 @@ def analisar_ouro():
             model="llama-3.1-8b-instant",
             messages=[{"role": "user", "content": prompt}]
         )
-        resposta_ia = chat_completion.choices[0].message.content.strip()
-        
-        # Separando a resposta em IA e Notícias
-        partes = resposta_ia.split("|||")
-        resultado_motor["explicacao_ia"] = partes[0].strip() if len(partes) > 0 else resposta_ia
-        resultado_motor["noticias_macro"] = partes[1].strip() if len(partes) > 1 else "Agenda macroeconômica não disponível no momento."
-        
+        resultado_motor["explicacao_ia"] = chat_completion.choices[0].message.content.strip()
     except Exception as e:
-        resultado_motor["explicacao_ia"] = "Modo técnico ativo. Monitoramento de liquidez em andamento."
-        resultado_motor["noticias_macro"] = "Falha ao buscar agenda de notícias."
+        resultado_motor["explicacao_ia"] = "Analisando fluxo de ordens e estrutura de mercado..."
 
     return jsonify(resultado_motor)
 

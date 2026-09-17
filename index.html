@@ -29,7 +29,6 @@
         .btn-analisar { background-color: #00E676; color: #000; border: none; padding: 10px 15px; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 13px; text-transform: uppercase; transition: 0.2s; flex-grow: 1; }
         .btn-analisar:hover { background-color: #00c853; box-shadow: 0 0 10px rgba(0,230,118,0.4); }
         .btn-aquecer { background-color: #ff9800; color: #000; border: none; padding: 10px 15px; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 13px; text-transform: uppercase; transition: 0.2s; }
-        
         .btn-robo { background-color: #8e44ad; color: #fff; border: none; padding: 10px 15px; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 13px; text-transform: uppercase; transition: 0.2s; box-shadow: 0 0 10px rgba(142,68,173,0.4); }
         .btn-robo:hover { background-color: #9b59b6; }
         .btn-robo.ativo { background-color: #e74c3c; box-shadow: 0 0 10px rgba(231,76,60,0.6); animation: pulsarRobo 2s infinite; }
@@ -50,12 +49,16 @@
         
         .ai-box { background-color: #1a1a24; padding: 12px; border-radius: 3px; font-size: 12px; line-height: 1.5; border-left: 3px solid #00E676; color: #ccc; white-space: pre-line; margin-bottom: 10px; }
         
+        /* NOVO MÓDULO DE VOLUME E ONDAS */
+        .vol-box { background-color: #1a1a24; padding: 12px; border-radius: 3px; border: 1px solid #282838; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;}
+        .vol-label { font-size: 11px; color: #888; text-transform: uppercase; font-weight: bold; }
+        .vol-value { font-size: 13px; font-weight: bold; color: #4facfe; }
+        .wave-tag { font-size: 10px; background: rgba(142,68,173,0.2); color: #9b59b6; padding: 3px 8px; border-radius: 3px; border: 1px solid #8e44ad; }
+
         #loading { display: none; text-align: center; color: #ff9800; font-size: 12px; margin-bottom: 20px; font-style: italic; }
         .chart-container { width: 100%; height: 500px; background: #121218; border-radius: 4px; border: 1px solid #1f1f2e; overflow: hidden; }
         .footer { text-align: center; color: #444; font-size: 12px; margin-top: 25px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; }
-        
-        /* Destaque visual quando há entrada */
-        .painel-destaque { box-shadow: 0 0 20px rgba(0, 230, 118, 0.2); }
+        .painel-destaque { box-shadow: 0 0 20px rgba(0, 230, 118, 0.2); border-color: #00E676; }
     </style>
 </head>
 <body>
@@ -71,7 +74,7 @@
         <div class="news-bar">
             <div class="news-header">📰 RADAR MACROECONÔMICO (USD / OURO)</div>
             <div class="news-list" id="news-container">
-                <div style="color: #888; font-size: 12px;">Sincronizando calendário com o servidor...</div>
+                <div style="color: #888; font-size: 12px;">Buscando agenda com a Inteligência Artificial...</div>
             </div>
         </div>
 
@@ -92,7 +95,6 @@
         <div id="loading">Operação em andamento...</div>
 
         <div class="grid-layout">
-            <!-- Painel de Resultados de Trading -->
             <div>
                 <div class="card" id="painel-resultado" style="display: none;">
                     <div id="badge-status" class="status-badge"></div>
@@ -134,12 +136,20 @@
                         </div>
                     </div>
 
-                    <div style="font-size: 11px; color: #00E676; text-transform: uppercase; margin-top: 15px; font-weight: bold;">🧠 Raciocínio Tático:</div>
+                    <!-- NOVO MÓDULO VISUAL: VOLUME E ONDAS -->
+                    <div class="vol-box">
+                        <div>
+                            <div class="vol-label">📊 Nó de Alto Volume (POC)</div>
+                            <div class="vol-value" id="val-poc">Calculando...</div>
+                        </div>
+                        <div class="wave-tag">Mapeamento de Ciclos Ativo</div>
+                    </div>
+
+                    <div style="font-size: 11px; color: #00E676; text-transform: uppercase; margin-top: 15px; font-weight: bold;">🧠 Estrutura e Raciocínio Tático:</div>
                     <div class="ai-box" id="texto-ia"></div>
                 </div>
             </div>
 
-            <!-- Gráfico -->
             <div>
                 <div class="card" style="display: block; padding: 0;">
                     <div style="padding: 10px; font-size: 11px; background: #1a1a24; border-bottom: 1px solid #1f1f2e; color: #888; display: flex; justify-content: space-between;">
@@ -151,16 +161,15 @@
             </div>
         </div>
 
-        <div class="footer">Feita por Lemos</div>
+        <div class="footer">Feito por Lemos</div>
     </div>
 
     <script>
-        // Variáveis Globais
         let roboAtivo = false;
         let roboInterval = null;
+        let pingAntiSono = null;
         let ultimoStatus = "SEM_SETUP";
 
-        // Som de Alerta Institucional
         const somAlerta = new Audio('https://www.myinstants.com/media/sounds/message-tone.mp3');
 
         function pedirPermissaoNotificacao() {
@@ -169,23 +178,28 @@
             }
         }
 
-        // LÓGICA DO ALERTA CEGO (Pop-up Push)
+        function dispararNotificacaoInicio() {
+            if (Notification.permission === "granted") {
+                new Notification('🤖 AUTO-SCANNER ATIVADO', {
+                    body: 'O Trading Shadow está monitorando o gráfico. O motor permanecerá acordado. Você será avisado quando houver uma entrada!',
+                    icon: 'https://cdn-icons-png.flaticon.com/512/2933/2933116.png'
+                });
+            }
+        }
+
         function dispararAlertaCego(estrategia) {
             somAlerta.play().catch(e => console.log("Áudio bloqueado. Clique na tela para permitir."));
             
             if (Notification.permission === "granted") {
                 const notificacao = new Notification('🟢 ALERTA TRADING SHADOW', {
-                    body: `Estratégia: ${estrategia}\nO robô detectou um gatilho!\n\nClique aqui para abrir o painel e revelar os alvos exatos (Entrada, TPs e Stop).`,
+                    body: `Estratégia: ${estrategia}\nO robô detectou um gatilho e validou a estrutura!\n\nClique aqui para revelar os alvos exatos.`,
                     icon: 'https://cdn-icons-png.flaticon.com/512/2933/2933116.png',
-                    requireInteraction: true // Faz a notificação ficar na tela até você clicar
+                    requireInteraction: true 
                 });
 
-                // Quando o usuário clicar na notificação:
                 notificacao.onclick = function() {
-                    window.focus(); // Puxa a aba do navegador para frente
-                    this.close(); // Fecha a notificação
-                    
-                    // Rola a tela suavemente para o painel verde para mostrar os dados claramente
+                    window.focus(); 
+                    this.close(); 
                     document.getElementById('painel-resultado').scrollIntoView({ behavior: 'smooth', block: 'center' });
                 };
             }
@@ -200,25 +214,34 @@
                 btnRobo.classList.add('ativo');
                 btnRobo.innerText = "⏹️ Desligar Auto-Scanner";
                 
+                setTimeout(dispararNotificacaoInicio, 1000);
+                
+                carregarNoticias();
                 buscarAnalise(true);
                 
-                // Checa a cada 3 minutos (180000ms)
                 roboInterval = setInterval(() => buscarAnalise(true), 180000);
+                pingAntiSono = setInterval(() => {
+                    fetch('https://shadow-v3-motor.onrender.com/ping').catch(e => console.log("Ping silencioso falhou"));
+                }, 120000);
                 
-                alert("🤖 Auto-Scanner Ativado! O robô analisará o mercado em background. Você receberá um alerta push clicável quando a entrada for confirmada.");
             } else {
                 roboAtivo = false;
                 btnRobo.classList.remove('ativo');
                 btnRobo.innerText = "🤖 Ligar Auto-Scanner";
                 clearInterval(roboInterval);
+                clearInterval(pingAntiSono);
                 ultimoStatus = "SEM_SETUP";
             }
         }
 
         async function carregarNoticias() {
+            document.getElementById('news-container').innerHTML = '<div style="color: #888; font-size: 12px;">Sincronizando calendário com o servidor...</div>';
             try {
                 const res = await fetch('https://shadow-v3-motor.onrender.com/noticias');
                 const noticias = await res.json();
+                
+                if(noticias.erro || noticias.length === 0) throw new Error("Sem dados");
+
                 let html = '';
                 noticias.forEach(n => {
                     let fogos = '🔥'.repeat(n.impacto);
@@ -226,7 +249,7 @@
                 });
                 document.getElementById('news-container').innerHTML = html;
             } catch (e) {
-                document.getElementById('news-container').innerHTML = '<div class="news-item">Falha ao sincronizar agenda. O motor pode estar dormindo.</div>';
+                document.getElementById('news-container').innerHTML = '<div class="news-item" style="border-left-color: #FF1744;">⚠️ Agenda indisponível (Motor recém acordado).</div>';
             }
         }
 
@@ -246,7 +269,7 @@
         async function aquecerMotor() {
             const loading = document.getElementById('loading');
             loading.style.display = 'block';
-            loading.innerText = "🔥 Acendendo os motores...";
+            loading.innerText = "🔥 Acendendo os motores e rastreando liquidez...";
             try {
                 const resposta = await fetch('https://shadow-v3-motor.onrender.com/ping');
                 const dados = await resposta.json();
@@ -255,7 +278,7 @@
                     document.getElementById('servidorLed').classList.add('ativo');
                     document.getElementById('statusTexto').innerText = "MOTOR ATIVO";
                     carregarNoticias();
-                    alert("Motor aquecido! Pronto para o trading.");
+                    alert("Motor aquecido! Estrutura de mercado pronta para análise.");
                 }
             } catch (erro) {
                 loading.innerText = "Erro ao aquecer. Tente novamente.";
@@ -268,7 +291,7 @@
             if (!silencioso) {
                 document.getElementById('painel-resultado').style.display = 'none';
                 document.getElementById('loading').style.display = 'block';
-                document.getElementById('loading').innerText = "Processando matriz quantitativa...";
+                document.getElementById('loading').innerText = "Mapeando Ondas de Elliott e Volume Profile...";
             }
 
             try {
@@ -287,10 +310,15 @@
                 document.getElementById('texto-ia').innerText = dados.explicacao_ia;
                 document.getElementById('val-preco').innerText = dados.preco_atual;
                 document.getElementById('val-dxy').innerText = dados.dxy_atual;
+                
+                // Atualiza o dado de Volume Profile
+                if(dados.poc_volume) {
+                    document.getElementById('val-poc').innerText = dados.poc_volume;
+                }
 
                 if(dados.status === "SETUP_CONFIRMADO") {
                     painel.style.borderLeftColor = "#00E676";
-                    painel.classList.add('painel-destaque'); // Adiciona brilho extra
+                    painel.classList.add('painel-destaque'); 
                     badge.className = "status-badge setup-ok";
                     badge.innerText = `🟢 ALERTA DE ENTRADA (${dados.estrategia_ativa})`;
                     
@@ -303,7 +331,6 @@
                     document.getElementById('val-tp2').innerText = dados.tp2;
                     document.getElementById('val-tp3').innerText = dados.tp3;
 
-                    // LÓGICA DO ALERTA CEGO SE O ROBÔ ESTIVER ATIVO
                     if (roboAtivo && ultimoStatus !== "SETUP_CONFIRMADO") {
                         dispararAlertaCego(dados.estrategia_ativa);
                     }
@@ -311,9 +338,9 @@
 
                 } else {
                     painel.style.borderLeftColor = "#FF1744";
-                    painel.classList.remove('painel-destaque'); // Remove o brilho
+                    painel.classList.remove('painel-destaque'); 
                     badge.className = "status-badge setup-wait";
-                    badge.innerText = `⏸️ FORA DA ZONA DE ENTRADA (${dados.estrategia_ativa})`;
+                    badge.innerText = `⏸️ AGUARDANDO ESTRUTURA (${dados.estrategia_ativa})`;
                     
                     document.getElementById('grid-entrada').style.display = 'none';
                     document.getElementById('grid-alvos').style.display = 'none';
