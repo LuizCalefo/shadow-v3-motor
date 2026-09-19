@@ -8,32 +8,38 @@
     <style>
         * { box-sizing: border-box; font-family: 'JetBrains Mono', monospace; }
         body { background-color: #050507; color: #e0e0e0; margin: 0; padding: 15px; display: flex; justify-content: center; }
-        .terminal { max-width: 1100px; width: 100%; border: 1px solid #1f1f2e; background: #0c0c10; padding: 20px; border-radius: 6px; box-shadow: 0 0 25px rgba(0,0,0,0.9); }
+        .terminal { max-width: 1200px; width: 100%; border: 1px solid #1f1f2e; background: #0c0c10; padding: 20px; border-radius: 6px; box-shadow: 0 0 25px rgba(0,0,0,0.9); }
         .topbar { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1f1f2e; padding-bottom: 12px; margin-bottom: 15px; }
         .logo { font-size: 20px; font-weight: bold; color: #00E676; letter-spacing: 2px; }
-        .status-server { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #888; }
+        .status-server { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #888; font-weight: bold; }
         .led { width: 8px; height: 8px; background-color: #FF1744; border-radius: 50%; box-shadow: 0 0 8px #FF1744; transition: 0.3s; }
         .led.ativo { background-color: #00E676; box-shadow: 0 0 8px #00E676; animation: pulsar 1.5s infinite; }
         @keyframes pulsar { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
         
-        .news-bar { background: #121218; border: 1px solid #282838; border-radius: 4px; padding: 12px 15px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 10px; border-left: 3px solid #ff9800; }
-        .news-header { font-size: 11px; color: #ff9800; text-transform: uppercase; font-weight: bold; letter-spacing: 1px; }
-        .news-list { display: flex; gap: 20px; flex-wrap: wrap; }
-        .news-item { background: #1a1a24; padding: 6px 12px; border-radius: 3px; font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 8px; border: 1px solid #1f1f2e; }
-        .news-time { color: #4facfe; font-weight: bold; }
+        .macro-dashboard { display: grid; grid-template-columns: 2fr 1fr; gap: 15px; margin-bottom: 20px; }
+        @media (max-width: 800px) { .macro-dashboard { grid-template-columns: 1fr; } }
+        .macro-card { background: #121218; border: 1px solid #282838; border-radius: 4px; overflow: hidden; display: flex; flex-direction: column; }
+        .macro-header { padding: 10px 15px; font-size: 11px; background: #1a1a24; border-bottom: 1px solid #1f1f2e; font-weight: bold; letter-spacing: 1px; display: flex; justify-content: space-between; align-items: center; }
+        .header-orange { color: #ff9800; border-left: 3px solid #ff9800; }
+        .header-purple { color: #9b59b6; border-left: 3px solid #9b59b6; }
         
-        .control-panel { background: #121218; padding: 15px; border-radius: 4px; border: 1px solid #1f1f2e; margin-bottom: 20px; display: flex; gap: 15px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+        .btn-consultar-payroll { background: #8e44ad; color: #fff; border: none; padding: 4px 8px; font-size: 10px; font-weight: bold; border-radius: 3px; cursor: pointer; text-transform: uppercase; transition: 0.2s; }
+        .btn-consultar-payroll:hover { background: #9b59b6; }
+
+        .control-panel { background: #121218; padding: 15px; border-radius: 4px; border: 1px solid #1f1f2e; margin-bottom: 20px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
         .omni-title { font-weight: bold; color: #00E676; text-transform: uppercase; font-size: 13px; letter-spacing: 1px; flex-grow: 1; }
         
+        .select-ativo { background: #1a1a24; color: #fff; border: 1px solid #282838; padding: 10px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; outline: none; }
+        .select-ativo option { background: #121218; }
+        
         .btn-analisar { background-color: #00E676; color: #000; border: none; padding: 10px 15px; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 13px; text-transform: uppercase; transition: 0.2s; }
-        .btn-analisar:hover { background-color: #00c853; box-shadow: 0 0 10px rgba(0,230,118,0.4); }
-        .btn-aquecer { background-color: #ff9800; color: #000; border: none; padding: 10px 15px; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 13px; text-transform: uppercase; transition: 0.2s; }
-        .btn-robo { background-color: #8e44ad; color: #fff; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 13px; text-transform: uppercase; transition: 0.2s; box-shadow: 0 0 10px rgba(142,68,173,0.4); }
-        .btn-robo:hover { background-color: #9b59b6; }
+        .btn-analisar:hover { background-color: #00c853; }
+        
+        .btn-robo { background-color: #8e44ad; color: #fff; border: none; padding: 12px 25px; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 14px; text-transform: uppercase; transition: 0.2s; box-shadow: 0 0 10px rgba(142,68,173,0.4); margin-left: auto; }
         .btn-robo.ativo { background-color: #e74c3c; box-shadow: 0 0 15px rgba(231,76,60,0.6); animation: pulsarRobo 1.5s infinite; }
         @keyframes pulsarRobo { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
 
-        .grid-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .grid-layout { display: grid; grid-template-columns: 350px 1fr; gap: 20px; }
         @media (max-width: 900px) { .grid-layout { grid-template-columns: 1fr; } }
 
         .card { background-color: #121218; padding: 15px; border-radius: 4px; border: 1px solid #1f1f2e; margin-bottom: 15px; transition: 0.3s; }
@@ -41,20 +47,24 @@
         .setup-ok { background-color: rgba(0,230,118,0.15); color: #00E676; border: 1px solid #00E676; }
         .setup-wait { background-color: rgba(255,23,68,0.15); color: #FF1744; border: 1px solid #FF1744; }
         
-        .info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px; }
+        .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 15px; }
         .info-box { background-color: #1a1a24; padding: 10px; border-radius: 3px; border: 1px solid #282838; text-align: center; }
         .info-label { font-size: 10px; color: #888; text-transform: uppercase; margin-bottom: 4px;}
         .info-value { font-size: 14px; font-weight: bold; color: #fff; }
         
-        .ai-box { background-color: #1a1a24; padding: 12px; border-radius: 3px; font-size: 12px; line-height: 1.5; border-left: 3px solid #00E676; color: #ccc; white-space: pre-line; margin-bottom: 10px; }
+        .ai-box { background-color: #1a1a24; padding: 12px; border-radius: 3px; font-size: 12px; line-height: 1.5; border-left: 3px solid #00E676; color: #ccc; margin-bottom: 10px; }
+        .payroll-box { background-color: #1a1a24; padding: 15px; font-size: 12px; line-height: 1.6; color: #ddd; flex-grow: 1; border-top: 1px solid #1f1f2e; }
         
-        .vol-box { background-color: #1a1a24; padding: 12px; border-radius: 3px; border: 1px solid #282838; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;}
-        .vol-label { font-size: 11px; color: #888; text-transform: uppercase; font-weight: bold; }
-        .vol-value { font-size: 13px; font-weight: bold; color: #4facfe; }
-        .wave-tag { font-size: 10px; background: rgba(142,68,173,0.2); color: #9b59b6; padding: 3px 8px; border-radius: 3px; border: 1px solid #8e44ad; }
+        .history-container { margin-top: 15px; border-top: 1px solid #1f1f2e; padding-top: 15px; }
+        .history-title { font-size: 11px; color: #4facfe; font-weight: bold; text-transform: uppercase; margin-bottom: 10px; display: flex; justify-content: space-between;}
+        .history-item { background: #1a1a24; border: 1px solid #282838; padding: 8px; border-radius: 4px; font-size: 11px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .res-win { color: #00E676; font-weight: bold; }
+        .res-loss { color: #FF1744; font-weight: bold; }
+        .res-wait { color: #ff9800; font-weight: bold; }
+        .btn-clear { background: none; border: none; color: #888; font-size: 10px; cursor: pointer; text-decoration: underline; }
 
         #loading { display: none; text-align: center; color: #ff9800; font-size: 12px; margin-bottom: 20px; font-style: italic; }
-        .chart-container { width: 100%; height: 500px; background: #121218; border-radius: 4px; border: 1px solid #1f1f2e; overflow: hidden; }
+        .chart-container { width: 100%; height: 600px; background: #121218; border-radius: 4px; border: 1px solid #1f1f2e; overflow: hidden; }
         .footer { text-align: center; color: #444; font-size: 12px; margin-top: 25px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; }
         .painel-destaque { box-shadow: 0 0 20px rgba(0, 230, 118, 0.2); border-color: #00E676; }
     </style>
@@ -65,32 +75,64 @@
         <div class="topbar">
             <div class="logo">TRADING SHADOW</div>
             <div class="status-server">
-                <div class="led" id="servidorLed"></div> <span id="statusTexto">MOTOR DORMINDO</span>
+                <div class="led" id="servidorLed" style="background-color: #ff9800; box-shadow: 0 0 8px #ff9800;"></div> 
+                <span id="statusTexto" style="color: #ff9800;">INICIALIZANDO MOTOR...</span>
             </div>
         </div>
 
-        <div class="news-bar">
-            <div class="news-header">📰 RADAR MACROECONÔMICO (USD / OURO)</div>
-            <div class="news-list" id="news-container">
-                <div style="color: #888; font-size: 12px;">Carregando agenda...</div>
+        <div class="macro-dashboard">
+            <div class="macro-card">
+                <div class="macro-header header-orange">📰 AGENDA DÓLAR (FILTRADA: ALTO IMPACTO)</div>
+                <div style="height: 250px;">
+                    <div class="tradingview-widget-container">
+                      <div class="tradingview-widget-container__widget"></div>
+                      <script type="application/json" src="https://s3.tradingview.com/external-embedding/embed-widget-events.js" async>
+                      {
+                      "colorTheme": "dark",
+                      "isTransparent": true,
+                      "width": "100%",
+                      "height": "100%",
+                      "locale": "br",
+                      "importanceFilter": "0,1", 
+                      "currencyFilter": "USD"
+                      }
+                      </script>
+                    </div>
+                </div>
+            </div>
+
+            <div class="macro-card">
+                <div class="macro-header header-purple">
+                    <span>🇺🇸 RADAR MENSAL & PAYROLL</span>
+                    <button class="btn-consultar-payroll" onclick="buscarRadarMensal()">🔍 Consultar</button>
+                </div>
+                <div class="payroll-box" id="texto-radar-mensal">
+                    <span style="color: #888; font-style: italic;">Clique em "Consultar" acima para gerar a análise macroeconômica do Payroll e FOMC via IA.</span>
+                </div>
             </div>
         </div>
 
+        <!-- PAINEL DE CONTROLE COM SELETOR DE MOEDA -->
         <div class="control-panel">
-            <div class="omni-title">⚡ Inteligência Omni-Estratégia Automática Ativa</div>
+            <div class="omni-title">⚡ Scanner Omni-Estratégia</div>
+            
+            <select id="seletor-ativo" class="select-ativo" onchange="trocarAtivo()">
+                <option value="XAU">🪙 OURO (XAU/USD)</option>
+                <option value="BTC">₿ BITCOIN (BTC/USD)</option>
+            </select>
+
+            <button class="btn-analisar" onclick="buscarAnalise(false)">Varredura Rápida</button>
             <button class="btn-robo" id="btn-robo" onclick="toggleRobo()">🤖 Ligar Auto-Scanner</button>
-            <button class="btn-aquecer" onclick="aquecerMotor()">🔥 Aquecer</button>
-            <button class="btn-analisar" onclick="buscarAnalise(false)">Analisar Agora</button>
         </div>
 
-        <div id="loading">Operação em andamento...</div>
+        <div id="loading">Varrendo mercado em milissegundos...</div>
 
         <div class="grid-layout">
             <div>
-                <div class="card" id="painel-resultado" style="display: none;">
-                    <div id="badge-status" class="status-badge"></div>
+                <div class="card" id="painel-resultado" style="display: block;">
+                    <div id="badge-status" class="status-badge setup-wait">⏸️ AGUARDANDO ESTRUTURA</div>
                     
-                    <div class="info-grid" id="grid-entrada" style="display: none; grid-template-columns: 1fr 1fr;">
+                    <div class="info-grid" id="grid-entrada" style="display: none;">
                         <div class="info-box">
                             <div class="info-label">Preço Entrada</div>
                             <div class="info-value" id="val-entrada" style="color: #00E676;">--</div>
@@ -101,53 +143,57 @@
                         </div>
                     </div>
 
-                    <div class="info-grid" id="grid-alvos" style="display: none;">
+                    <div class="info-grid" id="grid-alvos" style="display: none; grid-template-columns: 1fr 1fr 1fr;">
                         <div class="info-box">
-                            <div class="info-label">Alvo 1 (TP1)</div>
-                            <div class="info-value" id="val-tp1" style="color: #00E676;">--</div>
+                            <div class="info-label">TP 1</div>
+                            <div class="info-value" id="val-tp1" style="color: #00E676; font-size:12px;">--</div>
                         </div>
                         <div class="info-box">
-                            <div class="info-label">Alvo 2 (TP2)</div>
-                            <div class="info-value" id="val-tp2" style="color: #00E676;">--</div>
+                            <div class="info-label">TP 2</div>
+                            <div class="info-value" id="val-tp2" style="color: #00E676; font-size:12px;">--</div>
                         </div>
                         <div class="info-box">
-                            <div class="info-label">Alvo Final (TP3)</div>
-                            <div class="info-value" id="val-tp3" style="color: #00E676;">--</div>
+                            <div class="info-label">TP 3</div>
+                            <div class="info-value" id="val-tp3" style="color: #00E676; font-size:12px;">--</div>
                         </div>
                     </div>
 
-                    <div class="info-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 10px;">
+                    <div class="info-grid">
                         <div class="info-box">
-                            <div class="info-label">XAUUSD Atual</div>
+                            <div class="info-label" id="label-ativo-atual">XAUUSD Atual</div>
                             <div class="info-value" id="val-preco">--</div>
                         </div>
                         <div class="info-box">
-                            <div class="info-label">DXY Atual</div>
-                            <div class="info-value" id="val-dxy" style="color: #4facfe;">--</div>
+                            <div class="info-label">POC Volume</div>
+                            <div class="info-value" id="val-poc" style="color: #4facfe;">--</div>
                         </div>
                     </div>
 
-                    <div class="vol-box">
-                        <div>
-                            <div class="vol-label">📊 Nó de Alto Volume (POC)</div>
-                            <div class="vol-value" id="val-poc">Calculando...</div>
-                        </div>
-                        <div class="wave-tag">Mapeamento de Ciclos Ativo</div>
-                    </div>
+                    <div style="font-size: 11px; color: #00E676; text-transform: uppercase; margin-bottom: 5px; font-weight: bold;">🧠 Raciocínio Algorítmico:</div>
+                    <div class="ai-box" id="texto-ia">Motor pronto. Aguardando inicialização da varredura...</div>
 
-                    <div style="font-size: 11px; color: #00E676; text-transform: uppercase; margin-top: 15px; font-weight: bold;">🧠 Estrutura e Raciocínio Tático:</div>
-                    <div class="ai-box" id="texto-ia"></div>
+                    <!-- MÓDULO DE HISTÓRICO -->
+                    <div class="history-container">
+                        <div class="history-title">
+                            <span>📜 LOG DE OPERAÇÕES</span>
+                            <button class="btn-clear" onclick="limparHistorico()">Limpar</button>
+                        </div>
+                        <div id="lista-historico">
+                            <div style="color:#888; font-size: 10px;">Nenhuma operação registrada ainda.</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
+            <!-- GRÁFICO DINÂMICO (OURO OU BITCOIN) -->
             <div>
                 <div class="card" style="display: block; padding: 0;">
                     <div style="padding: 10px; font-size: 11px; background: #1a1a24; border-bottom: 1px solid #1f1f2e; color: #888; display: flex; justify-content: space-between;">
-                        <span>📈 GRÁFICO OMNI: XAUUSD</span>
+                        <span id="label-chart">📈 GRÁFICO OMNI: XAUUSD</span>
                         <span style="color: #00E676; font-weight:bold;">15 MIN</span>
                     </div>
-                    <div class="chart-container">
-                        <iframe scrolling="no" allowtransparency="true" frameborder="0" src="https://www.tradingview-widget.com/embed-widget/advanced-chart/?locale=br#%7B%22autosize%22%3Atrue%2C%22symbol%22%3A%22OANDA%3AXAUUSD%22%2C%22interval%22%3A%2215%22%2C%22timezone%22%3A%22America%2FSao_Paulo%22%2C%22theme%22%3A%22dark%22%2C%22style%22%3A%221%22%2C%22locale%22%3A%22br%22%2C%22hide_top_toolbar%22%3Afalse%2C%22allow_symbol_change%22%3A%22false%22%2C%22calendar%22%3Afalse%2C%22support_host%22%3A%22https%3A%22%7D" style="width:100%; height:100%;"></iframe>
+                    <div class="chart-container" id="box-grafico">
+                        <!-- Gerado via JS -->
                     </div>
                 </div>
             </div>
@@ -161,64 +207,156 @@
         let roboInterval = null;
         let pingAntiSono = null;
         let ultimoStatus = "SEM_SETUP";
+        let ultimoGatilhoID = null;
 
         const somAlerta = new Audio('https://www.myinstants.com/media/sounds/message-tone.mp3');
 
-        function pedirPermissaoNotificacao() {
-            if (Notification.permission !== "granted") {
-                Notification.requestPermission();
-            }
-        }
-
-        function dispararNotificacaoInicio() {
-            if (Notification.permission === "granted") {
-                new Notification('🤖 AUTO-SCANNER LIGADO', {
-                    body: 'O Motor Omni-Estratégia está online. Você será avisado assim que houver um gatilho de entrada no Ouro!',
-                    icon: 'https://cdn-icons-png.flaticon.com/512/2933/2933116.png'
-                });
-            }
-        }
-
-        function dispararAlertaCego(estrategia) {
-            somAlerta.play().catch(e => console.log("Áudio bloqueado. Clique na tela para permitir."));
+        function trocarAtivo() {
+            const ativo = document.getElementById('seletor-ativo').value;
+            const symbolTV = ativo === 'BTC' ? 'BINANCE:BTCUSD' : 'OANDA:XAUUSD';
+            const nomeStr = ativo === 'BTC' ? 'BTCUSD' : 'XAUUSD';
             
+            // Atualiza os textos da interface
+            document.getElementById('label-ativo-atual').innerText = nomeStr + " Atual";
+            document.getElementById('label-chart').innerText = "📈 GRÁFICO OMNI: " + nomeStr;
+
+            // Substitui o iFrame do TradingView
+            document.getElementById('box-grafico').innerHTML = `<iframe scrolling="no" allowtransparency="true" frameborder="0" src="https://www.tradingview-widget.com/embed-widget/advanced-chart/?locale=br#%7B%22autosize%22%3Atrue%2C%22symbol%22%3A%22${symbolTV}%22%2C%22interval%22%3A%2215%22%2C%22timezone%22%3A%22America%2FSao_Paulo%22%2C%22theme%22%3A%22dark%22%2C%22style%22%3A%221%22%2C%22locale%22%3A%22br%22%2C%22hide_top_toolbar%22%3Afalse%2C%22allow_symbol_change%22%3A%22false%22%2C%22calendar%22%3Afalse%2C%22support_host%22%3A%22https%3A%22%7D" style="width:100%; height:100%;"></iframe>`;
+            
+            // Se mudou de ativo, zera o status anterior para poder apitar de novo
+            ultimoStatus = "SEM_SETUP";
+        }
+
+        function carregarHistorico() {
+            let hist = JSON.parse(localStorage.getItem('shadowHistory')) || [];
+            renderizarHistorico(hist);
+            return hist;
+        }
+
+        function salvarHistorico(hist) {
+            localStorage.setItem('shadowHistory', JSON.stringify(hist));
+            renderizarHistorico(hist);
+        }
+
+        function limparHistorico() {
+            localStorage.removeItem('shadowHistory');
+            renderizarHistorico([]);
+        }
+
+        function renderizarHistorico(hist) {
+            const container = document.getElementById('lista-historico');
+            if(hist.length === 0) {
+                container.innerHTML = '<div style="color:#888; font-size: 10px;">Nenhuma operação na sessão.</div>';
+                return;
+            }
+            
+            let html = '';
+            hist.slice().reverse().slice(0, 5).forEach(trade => {
+                let cssClass = trade.resultado === 'WIN' ? 'res-win' : (trade.resultado === 'LOSS' ? 'res-loss' : 'res-wait');
+                let textoRes = trade.resultado === 'WAIT' ? '⏳ Andamento' : (trade.resultado === 'WIN' ? '🟢 WIN' : '🔴 LOSS');
+                
+                html += `
+                <div class="history-item">
+                    <div>
+                        <strong style="color:#fff;">${trade.ativo} - ${trade.estrategia}</strong><br>
+                        <span style="color:#888;">Entrada: ${trade.entrada} | TP1: ${trade.tp1}</span>
+                    </div>
+                    <div class="${cssClass}">${textoRes}</div>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function avaliarOperacoesAbertas(precoAtual, ativoAtual) {
+            let hist = carregarHistorico();
+            let mudou = false;
+
+            hist.forEach(trade => {
+                // Só avalia se o ativo do log bater com o ativo que estamos scaneando agora
+                if(trade.resultado === 'WAIT' && trade.ativo === ativoAtual) {
+                    if(precoAtual >= trade.tp1) {
+                        trade.resultado = 'WIN';
+                        mudou = true;
+                    } else if (precoAtual <= trade.sl) {
+                        trade.resultado = 'LOSS';
+                        mudou = true;
+                    }
+                }
+            });
+
+            if(mudou) salvarHistorico(hist);
+        }
+
+        function registrarNovaEntrada(dados) {
+            let idAtual = dados.ativo + dados.estrategia_ativa + dados.data_hora;
+            if(ultimoGatilhoID !== idAtual) {
+                let hist = carregarHistorico();
+                hist.push({
+                    ativo: dados.ativo,
+                    estrategia: dados.estrategia_ativa,
+                    entrada: dados.entrada,
+                    tp1: dados.tp1,
+                    sl: dados.stop_loss,
+                    resultado: 'WAIT',
+                    id: idAtual
+                });
+                salvarHistorico(hist);
+                ultimoGatilhoID = idAtual;
+            }
+        }
+
+        function pedirPermissaoNotificacao() {
+            if (Notification.permission !== "granted") Notification.requestPermission();
+        }
+
+        function dispararAlertaCego(estrategia, ativo) {
+            somAlerta.play().catch(e => console.log("Áudio bloqueado."));
             if (Notification.permission === "granted") {
                 const notificacao = new Notification('🟢 ALERTA TRADING SHADOW', {
-                    body: `Setup validado: ${estrategia}!\n\nClique para abrir a mesa e ver a Entrada, Alvos e Stop.`,
+                    body: `Ativo: ${ativo}\nGatilho validado: ${estrategia}!\nClique para revelar os alvos.`,
                     icon: 'https://cdn-icons-png.flaticon.com/512/2933/2933116.png',
                     requireInteraction: true 
                 });
-
-                notificacao.onclick = function() {
-                    window.focus(); 
-                    this.close(); 
-                    document.getElementById('painel-resultado').scrollIntoView({ behavior: 'smooth', block: 'center' });
-                };
+                notificacao.onclick = function() { window.focus(); this.close(); };
             }
         }
 
+        async function buscarRadarMensal() {
+            const caixa = document.getElementById('texto-radar-mensal');
+            caixa.innerHTML = '<span style="color: #ff9800;">Consultando inteligência macro...</span>';
+            try {
+                const resposta = await fetch('https://shadow-v3-motor.onrender.com/radar-mensal');
+                const dados = await resposta.json();
+                caixa.innerText = dados.radar;
+            } catch (erro) {
+                caixa.innerText = "Falha ao consultar o radar. Servidor pode estar dormindo.";
+            }
+        }
+
+        window.onload = () => {
+            trocarAtivo(); // Injeta o gráfico Ouro inicial
+            carregarHistorico();
+            fetch('https://shadow-v3-motor.onrender.com/ping')
+                .then(res => res.json())
+                .then(dados => {
+                    const led = document.getElementById('servidorLed');
+                    led.style.backgroundColor = ""; led.style.boxShadow = ""; led.classList.add('ativo');
+                    const statusTexto = document.getElementById('statusTexto');
+                    statusTexto.style.color = "#888"; statusTexto.innerText = "ROBÔ PRONTO PARA VARREDURA";
+                });
+        };
+
         function toggleRobo() {
             const btnRobo = document.getElementById('btn-robo');
-            
             if (!roboAtivo) {
                 pedirPermissaoNotificacao();
                 roboAtivo = true;
                 btnRobo.classList.add('ativo');
                 btnRobo.innerText = "⏹️ Desligar Auto-Scanner";
                 
-                setTimeout(dispararNotificacaoInicio, 500);
-                
-                carregarNoticias();
                 buscarAnalise(true);
-                
-                // Varre o mercado a cada 3 minutos
                 roboInterval = setInterval(() => buscarAnalise(true), 180000);
-                
-                // Impede o servidor de dormir
-                pingAntiSono = setInterval(() => {
-                    fetch('https://shadow-v3-motor.onrender.com/ping').catch(e => console.log("Ping silencioso"));
-                }, 120000);
-                
+                pingAntiSono = setInterval(() => { fetch('https://shadow-v3-motor.onrender.com/ping'); }, 120000);
             } else {
                 roboAtivo = false;
                 btnRobo.classList.remove('ativo');
@@ -229,73 +367,28 @@
             }
         }
 
-        async function carregarNoticias() {
-            try {
-                const res = await fetch('https://shadow-v3-motor.onrender.com/noticias');
-                const noticias = await res.json();
-                
-                let html = '';
-                noticias.forEach(n => {
-                    let fogos = '🔥'.repeat(n.impacto);
-                    html += `<div class="news-item"><span class="news-time">${n.hora}</span> | <span>${n.evento}</span> <span>${fogos}</span></div>`;
-                });
-                document.getElementById('news-container').innerHTML = html;
-            } catch (e) {
-                document.getElementById('news-container').innerHTML = '<div class="news-item" style="border-left-color: #FF1744;">⚠️ Agenda indisponível (Aguardando motor).</div>';
-            }
-        }
-
-        window.onload = () => {
-            carregarNoticias();
-        };
-
-        async function aquecerMotor() {
-            const loading = document.getElementById('loading');
-            loading.style.display = 'block';
-            loading.innerText = "🔥 Acendendo os motores...";
-            try {
-                const resposta = await fetch('https://shadow-v3-motor.onrender.com/ping');
-                const dados = await resposta.json();
-                loading.style.display = 'none';
-                if(dados.status === "motor_aquecido") {
-                    document.getElementById('servidorLed').classList.add('ativo');
-                    document.getElementById('statusTexto').innerText = "MOTOR ATIVO";
-                    carregarNoticias();
-                    alert("Motor Omni-Estratégia 100% Aquecido!");
-                }
-            } catch (erro) {
-                loading.innerText = "Erro ao aquecer. Tente novamente.";
-            }
-        }
-
         async function buscarAnalise(silencioso = false) {
+            const ativoEscolhido = document.getElementById('seletor-ativo').value;
+
             if (!silencioso) {
-                document.getElementById('painel-resultado').style.display = 'none';
                 document.getElementById('loading').style.display = 'block';
-                document.getElementById('loading').innerText = "Processando estrutura Omni-Estratégia...";
+                document.getElementById('loading').innerText = `Analisando algoritmos para ${ativoEscolhido}...`;
             }
 
             try {
-                // A chamada agora não precisa mais do parâmetro "estrategia"
-                const resposta = await fetch('https://shadow-v3-motor.onrender.com/analisar-ouro');
+                const resposta = await fetch(`https://shadow-v3-motor.onrender.com/analisar?ativo=${ativoEscolhido}`);
                 const dados = await resposta.json();
                 
                 if (!silencioso) document.getElementById('loading').style.display = 'none';
-                
-                document.getElementById('servidorLed').classList.add('ativo');
-                document.getElementById('statusTexto').innerText = "MOTOR ATIVO";
 
                 const painel = document.getElementById('painel-resultado');
                 const badge = document.getElementById('badge-status');
                 
-                painel.style.display = 'block';
                 document.getElementById('texto-ia').innerText = dados.explicacao_ia;
                 document.getElementById('val-preco').innerText = dados.preco_atual;
-                document.getElementById('val-dxy').innerText = dados.dxy_atual;
+                document.getElementById('val-poc').innerText = dados.poc_volume;
                 
-                if(dados.poc_volume) {
-                    document.getElementById('val-poc').innerText = dados.poc_volume;
-                }
+                avaliarOperacoesAbertas(dados.preco_atual, dados.ativo);
 
                 if(dados.status === "SETUP_CONFIRMADO") {
                     painel.style.borderLeftColor = "#00E676";
@@ -312,8 +405,10 @@
                     document.getElementById('val-tp2').innerText = dados.tp2;
                     document.getElementById('val-tp3').innerText = dados.tp3;
 
+                    registrarNovaEntrada(dados);
+
                     if (roboAtivo && ultimoStatus !== "SETUP_CONFIRMADO") {
-                        dispararAlertaCego(dados.estrategia_ativa);
+                        dispararAlertaCego(dados.estrategia_ativa, dados.ativo);
                     }
                     ultimoStatus = "SETUP_CONFIRMADO";
 
@@ -321,15 +416,16 @@
                     painel.style.borderLeftColor = "#FF1744";
                     painel.classList.remove('painel-destaque'); 
                     badge.className = "status-badge setup-wait";
-                    badge.innerText = `⏸️ AGUARDANDO ESTRUTURA (${dados.estrategia_ativa})`;
+                    badge.innerText = `⏸️ VARRENDO ASSIMETRIA NO ${dados.ativo}`;
                     
                     document.getElementById('grid-entrada').style.display = 'none';
                     document.getElementById('grid-alvos').style.display = 'none';
-
                     ultimoStatus = "SEM_SETUP";
                 }
             } catch (erro) {
-                if (!silencioso) document.getElementById('loading').innerText = "Motor dormindo. Use '🔥 Aquecer Motor'.";
+                if (!silencioso) {
+                    document.getElementById('loading').innerText = "Falha de conexão com o robô.";
+                }
             }
         }
     </script>
