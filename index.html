@@ -47,12 +47,18 @@
         .setup-ok { background-color: rgba(0,230,118,0.15); color: #00E676; border: 1px solid #00E676; }
         .setup-wait { background-color: rgba(255,23,68,0.15); color: #FF1744; border: 1px solid #FF1744; }
         
+        /* NOVO: PAINEL TÁTICO */
+        .painel-tatico { display: none; background: #1a1a24; border: 2px solid #8e44ad; border-radius: 6px; padding: 15px; margin-bottom: 15px; box-shadow: 0 0 15px rgba(142,68,173,0.2); }
+        .tatico-header { color: #9b59b6; font-size: 14px; font-weight: bold; margin-bottom: 12px; border-bottom: 1px solid #282838; padding-bottom: 8px; }
+        .tatico-row { margin-bottom: 8px; font-size: 12px; }
+        .tatico-label { color: #888; font-weight: bold; }
+        .tatico-caixa-texto { background: rgba(142,68,173,0.1); padding: 10px; border-radius: 4px; border-left: 3px solid #8e44ad; font-size: 11px; line-height: 1.5; color: #ccc; margin-top: 10px; }
+        
         .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 15px; }
         .info-box { background-color: #1a1a24; padding: 10px; border-radius: 3px; border: 1px solid #282838; text-align: center; }
         .info-label { font-size: 10px; color: #888; text-transform: uppercase; margin-bottom: 4px;}
         .info-value { font-size: 14px; font-weight: bold; color: #fff; }
         
-        .ai-box { background-color: #1a1a24; padding: 12px; border-radius: 3px; font-size: 12px; line-height: 1.5; border-left: 3px solid #00E676; color: #ccc; margin-bottom: 10px; }
         .payroll-box { background-color: #1a1a24; padding: 15px; font-size: 12px; line-height: 1.6; color: #ddd; flex-grow: 1; border-top: 1px solid #1f1f2e; }
         
         .history-container { margin-top: 15px; border-top: 1px solid #1f1f2e; padding-top: 15px; }
@@ -81,7 +87,7 @@
         </div>
 
         <div class="warning-box" id="aviso-tela">
-            ⚠️ <b>Atenção:</b> Para o Auto-Scanner funcionar e mandar sinais de áudio, <b>NÃO</b> feche nem minimize esta aba. Mantenha a tela do celular ligada nesta página. Um sistema Anti-Dormir foi ativado.
+            ⚠️ <b>Atenção:</b> Mantenha a aba aberta para receber os Sinais. O sistema Anti-Dormir impedirá a tela de apagar.
         </div>
 
         <div class="macro-dashboard">
@@ -125,7 +131,7 @@
             </select>
 
             <button class="btn-analisar" onclick="buscarAnalise(false, false)">Varredura Rápida</button>
-            <button class="btn-teste" onclick="buscarAnalise(false, true)">🔔 Forçar Teste de Sinal</button>
+            <button class="btn-teste" onclick="buscarAnalise(false, true)">🔔 Forçar Teste</button>
             <button class="btn-robo" id="btn-robo" onclick="toggleRobo()">🤖 Ligar Auto-Scanner</button>
         </div>
 
@@ -136,10 +142,25 @@
                 <div class="card" id="painel-resultado" style="display: block;">
                     <div id="badge-status" class="status-badge setup-wait">⏸️ AGUARDANDO ESTRUTURA</div>
                     
-                    <div class="info-grid" id="grid-probabilidade" style="display: none; grid-template-columns: 1fr;">
-                        <div class="info-box" style="background-color: rgba(142,68,173,0.1); border-color: #8e44ad; padding: 15px;">
-                            <div class="info-label" style="color:#9b59b6; font-size: 11px;">Chance de Acerto (Win Rate)</div>
-                            <div class="info-value" id="val-prob" style="color: #fff; font-size: 22px; margin-top: 5px;">--%</div>
+                    <!-- NOVO: PAINEL TÁTICO EXPLICATIVO -->
+                    <div id="painel-tatico" class="painel-tatico">
+                        <div class="tatico-header">⚡ RELATÓRIO TÁTICO DE ENTRADA</div>
+                        
+                        <div class="tatico-row">
+                            <span class="tatico-label">Ativo:</span> <span id="tat-ativo" style="color:#fff; font-weight:bold;">--</span>
+                        </div>
+                        <div class="tatico-row">
+                            <span class="tatico-label">Estratégia:</span> <span id="tat-estrategia" style="color:#fff; font-weight:bold;">--</span>
+                        </div>
+                        <div class="tatico-row">
+                            <span class="tatico-label">Probabilidade Win:</span> <span id="tat-prob" style="color:#00E676; font-size:16px; font-weight:bold;">--</span>
+                        </div>
+                        <div class="tatico-row">
+                            <span class="tatico-label">Confiança Máxima:</span> <span id="tat-pontos" style="color:#4facfe; font-weight:bold;">--</span>
+                        </div>
+                        
+                        <div class="tatico-caixa-texto">
+                            <strong style="color:#9b59b6;">Lógica da Entrada:</strong> <span id="tat-explica">--</span>
                         </div>
                     </div>
 
@@ -168,20 +189,6 @@
                             <div class="info-value" id="val-tp3" style="color: #00E676; font-size:12px;">--</div>
                         </div>
                     </div>
-
-                    <div class="info-grid">
-                        <div class="info-box">
-                            <div class="info-label" id="label-ativo-atual">XAUUSD Atual</div>
-                            <div class="info-value" id="val-preco">--</div>
-                        </div>
-                        <div class="info-box">
-                            <div class="info-label">POC Volume</div>
-                            <div class="info-value" id="val-poc" style="color: #4facfe;">--</div>
-                        </div>
-                    </div>
-
-                    <div style="font-size: 11px; color: #00E676; text-transform: uppercase; margin-bottom: 5px; font-weight: bold;">🧠 Decisão do Analista:</div>
-                    <div class="ai-box" id="texto-ia">Motor pronto. Aguardando inicialização...</div>
 
                     <div class="history-container">
                         <div class="history-title">
@@ -216,28 +223,20 @@
         let pingAntiSono = null;
         let ultimoStatus = "SEM_SETUP";
         let ultimoGatilhoID = null;
-        let wakeLock = null; // Impede a tela do celular de apagar
+        let wakeLock = null; 
 
         const somAlerta = new Audio('https://www.myinstants.com/media/sounds/message-tone.mp3');
 
-        // FUNÇÃO ANTI-DORMIR (Screen Wake Lock API)
         async function solicitarWakeLock() {
             try {
                 if ('wakeLock' in navigator) {
                     wakeLock = await navigator.wakeLock.request('screen');
-                    wakeLock.addEventListener('release', () => {
-                        console.log('Wake Lock foi liberado.');
-                    });
                 }
-            } catch (err) {
-                console.error(`${err.name}, ${err.message}`);
-            }
+            } catch (err) { console.error(err); }
         }
 
         function liberarWakeLock() {
-            if (wakeLock !== null) {
-                wakeLock.release().then(() => { wakeLock = null; });
-            }
+            if (wakeLock !== null) { wakeLock.release().then(() => { wakeLock = null; }); }
         }
 
         function trocarAtivo() {
@@ -245,9 +244,7 @@
             const symbolTV = ativo === 'BTC' ? 'BINANCE:BTCUSD' : 'OANDA:XAUUSD';
             const nomeStr = ativo === 'BTC' ? 'BTCUSD' : 'XAUUSD';
             
-            document.getElementById('label-ativo-atual').innerText = nomeStr + " Atual";
             document.getElementById('label-chart').innerText = "📈 GRÁFICO OMNI: " + nomeStr;
-
             document.getElementById('box-grafico').innerHTML = `<iframe scrolling="no" allowtransparency="true" frameborder="0" src="https://www.tradingview-widget.com/embed-widget/advanced-chart/?locale=br#%7B%22autosize%22%3Atrue%2C%22symbol%22%3A%22${symbolTV}%22%2C%22interval%22%3A%2215%22%2C%22timezone%22%3A%22America%2FSao_Paulo%22%2C%22theme%22%3A%22dark%22%2C%22style%22%3A%221%22%2C%22locale%22%3A%22br%22%2C%22hide_top_toolbar%22%3Afalse%2C%22allow_symbol_change%22%3A%22false%22%2C%22calendar%22%3Afalse%2C%22support_host%22%3A%22https%3A%22%7D" style="width:100%; height:100%;"></iframe>`;
             ultimoStatus = "SEM_SETUP";
         }
@@ -307,12 +304,11 @@
                     }
                 }
             });
-
             if(mudou) salvarHistorico(hist);
         }
 
         function registrarNovaEntrada(dados) {
-            if(dados.estrategia_ativa === "TESTE DE SISTEMA") return; // Não salva testes no histórico
+            if(dados.estrategia_ativa === "TESTE DE SISTEMA") return; 
             let idAtual = dados.ativo + dados.estrategia_ativa + dados.data_hora;
             if(ultimoGatilhoID !== idAtual) {
                 let hist = carregarHistorico();
@@ -335,20 +331,19 @@
             if (Notification.permission !== "granted") Notification.requestPermission();
         }
 
-        function dispararAlertaCego(estrategia, ativo, prob) {
-            // Se o usuário clicar na página, libera o áudio (política do navegador)
-            somAlerta.play().catch(e => console.log("Áudio bloqueado pelo navegador."));
+        function dispararAlertaCego(estrategia, ativo, prob, pontos) {
+            somAlerta.play().catch(e => console.log("Áudio bloqueado."));
             
             if (Notification.permission === "granted") {
-                const notificacao = new Notification('🟢 ALERTA TRADING SHADOW', {
-                    body: `Ativo: ${ativo}\nEstratégia: ${estrategia}\nWin Rate: ${prob}\n\nClique para abrir!`,
+                const notificacao = new Notification('🟢 RELATÓRIO TÁTICO', {
+                    body: `Ativo: ${ativo}\nEstratégia: ${estrategia}\nWin Rate: ${prob}\nPotencial: ${pontos}\n\nClique para abrir o painel!`,
                     icon: 'https://cdn-icons-png.flaticon.com/512/2933/2933116.png',
                     requireInteraction: true 
                 });
                 notificacao.onclick = function() { 
                     window.focus(); 
                     this.close(); 
-                    document.getElementById('painel-resultado').scrollIntoView({ behavior: 'smooth', block: 'center' }); 
+                    document.getElementById('painel-tatico').scrollIntoView({ behavior: 'smooth', block: 'center' }); 
                 };
             }
         }
@@ -361,7 +356,7 @@
                 const dados = await resposta.json();
                 caixa.innerText = dados.radar;
             } catch (erro) {
-                caixa.innerText = "Falha ao consultar o radar. Servidor pode estar dormindo.";
+                caixa.innerText = "Falha ao consultar o radar.";
             }
         }
 
@@ -382,7 +377,7 @@
             const btnRobo = document.getElementById('btn-robo');
             if (!roboAtivo) {
                 pedirPermissaoNotificacao();
-                solicitarWakeLock(); // Trava a tela para não dormir
+                solicitarWakeLock(); 
                 roboAtivo = true;
                 btnRobo.classList.add('ativo');
                 btnRobo.innerText = "⏹️ Desligar Auto-Scanner";
@@ -404,7 +399,7 @@
         }
 
         async function buscarAnalise(silencioso = false, forcarTeste = false) {
-            pedirPermissaoNotificacao(); // Garante permissão ao clicar no botão
+            pedirPermissaoNotificacao();
             
             const ativoEscolhido = document.getElementById('seletor-ativo').value;
             let url = `https://shadow-v3-motor.onrender.com/analisar?ativo=${ativoEscolhido}`;
@@ -415,9 +410,8 @@
             }
 
             if (!silencioso) {
-                document.getElementById('painel-resultado').style.display = 'none';
                 document.getElementById('loading').style.display = 'block';
-                document.getElementById('loading').innerText = forcarTeste ? "Forçando disparo de teste..." : `Analisando ${ativoEscolhido}...`;
+                document.getElementById('loading').innerText = forcarTeste ? "Forçando relatório tático..." : `Analisando ${ativoEscolhido}...`;
             }
 
             try {
@@ -429,23 +423,25 @@
                 const painel = document.getElementById('painel-resultado');
                 const badge = document.getElementById('badge-status');
                 
-                document.getElementById('texto-ia').innerText = dados.explicacao_ia;
-                document.getElementById('val-preco').innerText = dados.preco_atual;
-                document.getElementById('val-poc').innerText = dados.poc_volume;
-                
-                if(!forcarTeste) avaliarOperacoesAbertas(dados.preco_atual, dados.ativo);
+                if(!forcarTeste && dados.status !== "SEM_SETUP") avaliarOperacoesAbertas(dados.preco_atual, dados.ativo);
 
                 if(dados.status === "SETUP_CONFIRMADO") {
                     painel.style.borderLeftColor = "#00E676";
                     painel.classList.add('painel-destaque'); 
                     badge.className = "status-badge setup-ok";
-                    badge.innerText = `🟢 ALERTA: ${dados.estrategia_ativa}`;
+                    badge.innerText = `🟢 ALERTA: SINAL IDENTIFICADO`;
                     
-                    document.getElementById('grid-probabilidade').style.display = 'grid';
+                    // MOSTRAR O PAINEL TÁTICO
+                    document.getElementById('painel-tatico').style.display = 'block';
+                    document.getElementById('tat-ativo').innerText = dados.ativo;
+                    document.getElementById('tat-estrategia').innerText = dados.estrategia_ativa;
+                    document.getElementById('tat-prob').innerText = dados.probabilidade;
+                    document.getElementById('tat-pontos').innerText = dados.pontos_confianca;
+                    document.getElementById('tat-explica').innerText = dados.explicacao_estrategia;
+
                     document.getElementById('grid-entrada').style.display = 'grid';
                     document.getElementById('grid-alvos').style.display = 'grid';
                     
-                    document.getElementById('val-prob').innerText = dados.probabilidade;
                     document.getElementById('val-entrada').innerText = dados.entrada;
                     document.getElementById('val-stop').innerText = dados.stop_loss;
                     document.getElementById('val-tp1').innerText = dados.tp1;
@@ -454,9 +450,8 @@
 
                     registrarNovaEntrada(dados);
 
-                    // Dispara o alerta se for teste OU se o robô estiver ativo e for um sinal novo
                     if (forcarTeste || (roboAtivo && ultimoStatus !== "SETUP_CONFIRMADO")) {
-                        dispararAlertaCego(dados.estrategia_ativa, dados.ativo, dados.probabilidade);
+                        dispararAlertaCego(dados.estrategia_ativa, dados.ativo, dados.probabilidade, dados.pontos_confianca);
                     }
                     ultimoStatus = "SETUP_CONFIRMADO";
 
@@ -466,7 +461,8 @@
                     badge.className = "status-badge setup-wait";
                     badge.innerText = `⏸️ VARRENDO ASSIMETRIA NO ${dados.ativo}`;
                     
-                    document.getElementById('grid-probabilidade').style.display = 'none';
+                    // ESCONDER O PAINEL TÁTICO
+                    document.getElementById('painel-tatico').style.display = 'none';
                     document.getElementById('grid-entrada').style.display = 'none';
                     document.getElementById('grid-alvos').style.display = 'none';
                     ultimoStatus = "SEM_SETUP";
@@ -474,7 +470,7 @@
             } catch (erro) {
                 if (!silencioso) {
                     document.getElementById('loading').style.display = 'block';
-                    document.getElementById('loading').innerText = "Aguardando abertura do mercado ou liquidez do ativo.";
+                    document.getElementById('loading').innerText = "Aguardando liquidez ou abertura do mercado.";
                 }
             }
         }

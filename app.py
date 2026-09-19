@@ -39,7 +39,7 @@ def analisar():
     modo_teste = request.args.get('teste', 'false')
     simbolo = "BTC/USD" if ativo == "BTC" else "XAU/USD"
 
-    # MODO TESTE FORÇADO (Para você ter certeza que o alerta funciona)
+    # MODO TESTE FORÇADO (Para você ver o painel tático)
     if modo_teste == 'true':
         nome_ativo = "BTCUSD" if ativo == "BTC" else "XAUUSD"
         return jsonify({
@@ -56,7 +56,8 @@ def analisar():
             "tp2": 1520.00,
             "tp3": 1530.00,
             "probabilidade": "99.9%",
-            "explicacao_ia": "Isso é um sinal forçado de teste para garantir que o seu celular e navegador estão recebendo som e notificações corretamente."
+            "explicacao_estrategia": "Este é um disparo de teste. Serve para validar se o painel tático e as notificações estão sendo exibidos corretamente no seu aparelho.",
+            "pontos_confianca": "150 pontos (Equivalente ao TP1)"
         })
 
     url_dados = f"https://api.twelvedata.com/time_series?symbol={simbolo}&interval=15min&outputsize=50&apikey={TWELVEDATA_KEY}"
@@ -66,8 +67,6 @@ def analisar():
     resp_dxy = requests.get(url_dxy).json()
 
     if "values" not in resp_dados:
-        # Fim de semana o Ouro não atualiza velas novas no intervalo menor em algumas corretoras,
-        # O Bitcoin continua rodando normal.
         return jsonify({"erro": f"Mercado fechado ou sem liquidez no momento para {ativo}."}), 500
 
     df = pd.DataFrame(resp_dados["values"])
@@ -92,41 +91,46 @@ def analisar():
     tp1 = tp2 = tp3 = sl = 0.0
     estrategia_detectada = ""
     probabilidade_base = 0
+    explicacao_estrategia = ""
+    pontos_calc = 0
 
     mult = 100 if ativo == "BTC" else 1
 
-    # LÓGICA ULTRA SENSÍVEL
     if ema_9_atual > ema_21_atual:
         distancia_ema21 = candle_atual['low'] - ema_21_atual
-        # Aumentei a tolerância para pegar mais entradas
         if - (1.00 * mult) <= distancia_ema21 <= (2.00 * mult):
             status_setup = True
-            estrategia_detectada = "PULLBACK FLEXÍVEL (ALTA FREQUÊNCIA)"
+            estrategia_detectada = "PULLBACK FLEXÍVEL (COMPRA)"
             probabilidade_base = 78
             sl = round(ema_21_atual - (1.50 * mult), 2)
             tp1 = round(preco_atual + (1.50 * mult), 2)
             tp2 = round(preco_atual + (3.00 * mult), 2)
             tp3 = round(preco_atual + (5.00 * mult), 2)
+            explicacao_estrategia = "O preço corrigiu até a zona de valor (Média de 21) durante uma tendência de alta. As instituições costumam defender e comprar forte nessa região exata."
+            pontos_calc = int((tp1 - preco_atual) * 100) if ativo == "XAU" else int(tp1 - preco_atual)
             
         elif candle_anterior['close'] < candle_anterior['ema_9'] and preco_atual > ema_9_atual:
             status_setup = True
-            estrategia_detectada = "MOMENTUM SCALPER"
+            estrategia_detectada = "MOMENTUM SCALPER (COMPRA)"
             probabilidade_base = 65
             sl = round(candle_atual['low'] - (0.60 * mult), 2)
             tp1 = round(preco_atual + (1.20 * mult), 2)
             tp2 = round(preco_atual + (2.50 * mult), 2)
             tp3 = round(preco_atual + (4.00 * mult), 2)
+            explicacao_estrategia = "Rompimento agressivo superando a média de curto prazo (9). Isso indica entrada repentina de volume de grandes players. Operação rápida."
+            pontos_calc = int((tp1 - preco_atual) * 100) if ativo == "XAU" else int(tp1 - preco_atual)
 
     else:
-        # Em tendência de baixa, se o preço subir e encostar na ema 9 (Setup de Venda/Rejeição)
         if candle_atual['high'] >= ema_9_atual and candle_atual['close'] < ema_9_atual:
             status_setup = True
-            estrategia_detectada = "REJEIÇÃO DE TOPO (VENDA CURTA)"
+            estrategia_detectada = "REJEIÇÃO DE TOPO (VENDA)"
             probabilidade_base = 60
             sl = round(candle_atual['high'] + (1.00 * mult), 2)
             tp1 = round(preco_atual - (1.50 * mult), 2)
             tp2 = round(preco_atual - (3.00 * mult), 2)
             tp3 = round(preco_atual - (5.00 * mult), 2)
+            explicacao_estrategia = "O preço tentou subir, mas foi violentamente rejeitado na zona da Média Móvel, confirmando a força dos vendedores. Cenário ideal para entrar vendido."
+            pontos_calc = int((preco_atual - tp1) * 100) if ativo == "XAU" else int(preco_atual - tp1)
 
     nome_ativo = "BTCUSD" if ativo == "BTC" else "XAUUSD"
     probabilidade_final = round(probabilidade_base + (dxy_atual % 1), 1) if status_setup else 0
@@ -148,10 +152,10 @@ def analisar():
         resultado_motor["tp2"] = tp2
         resultado_motor["tp3"] = tp3
         resultado_motor["probabilidade"] = f"{probabilidade_final}%"
-        resultado_motor["explicacao_ia"] = f"Possível entrada detectada no {nome_ativo}. Chance de Win estimada em {probabilidade_final}%."
+        resultado_motor["explicacao_estrategia"] = explicacao_estrategia
+        resultado_motor["pontos_confianca"] = f"Alvo Seguro: {pontos_calc} pontos (Busque o TP1)"
     else:
         resultado_motor["status"] = "SEM_SETUP"
-        resultado_motor["explicacao_ia"] = "O mercado está processando ordens. Aguardando gatilho."
 
     return jsonify(resultado_motor)
 
