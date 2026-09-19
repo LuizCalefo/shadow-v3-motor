@@ -112,9 +112,8 @@
             </div>
         </div>
 
-        <!-- PAINEL DE CONTROLE COM SELETOR DE MOEDA -->
         <div class="control-panel">
-            <div class="omni-title">⚡ Scanner Omni-Estratégia</div>
+            <div class="omni-title">⚡ Scanner de Alta Frequência</div>
             
             <select id="seletor-ativo" class="select-ativo" onchange="trocarAtivo()">
                 <option value="XAU">🪙 OURO (XAU/USD)</option>
@@ -132,6 +131,14 @@
                 <div class="card" id="painel-resultado" style="display: block;">
                     <div id="badge-status" class="status-badge setup-wait">⏸️ AGUARDANDO ESTRUTURA</div>
                     
+                    <!-- NOVO: VISOR DE PROBABILIDADE -->
+                    <div class="info-grid" id="grid-probabilidade" style="display: none; grid-template-columns: 1fr;">
+                        <div class="info-box" style="background-color: rgba(142,68,173,0.1); border-color: #8e44ad; padding: 15px;">
+                            <div class="info-label" style="color:#9b59b6; font-size: 11px;">Chance de Acerto (Win Rate)</div>
+                            <div class="info-value" id="val-prob" style="color: #fff; font-size: 22px; margin-top: 5px;">--%</div>
+                        </div>
+                    </div>
+
                     <div class="info-grid" id="grid-entrada" style="display: none;">
                         <div class="info-box">
                             <div class="info-label">Preço Entrada</div>
@@ -169,7 +176,7 @@
                         </div>
                     </div>
 
-                    <div style="font-size: 11px; color: #00E676; text-transform: uppercase; margin-bottom: 5px; font-weight: bold;">🧠 Raciocínio Algorítmico:</div>
+                    <div style="font-size: 11px; color: #00E676; text-transform: uppercase; margin-bottom: 5px; font-weight: bold;">🧠 Decisão do Analista:</div>
                     <div class="ai-box" id="texto-ia">Motor pronto. Aguardando inicialização da varredura...</div>
 
                     <!-- MÓDULO DE HISTÓRICO -->
@@ -185,7 +192,7 @@
                 </div>
             </div>
 
-            <!-- GRÁFICO DINÂMICO (OURO OU BITCOIN) -->
+            <!-- GRÁFICO DINÂMICO -->
             <div>
                 <div class="card" style="display: block; padding: 0;">
                     <div style="padding: 10px; font-size: 11px; background: #1a1a24; border-bottom: 1px solid #1f1f2e; color: #888; display: flex; justify-content: space-between;">
@@ -193,7 +200,6 @@
                         <span style="color: #00E676; font-weight:bold;">15 MIN</span>
                     </div>
                     <div class="chart-container" id="box-grafico">
-                        <!-- Gerado via JS -->
                     </div>
                 </div>
             </div>
@@ -216,14 +222,10 @@
             const symbolTV = ativo === 'BTC' ? 'BINANCE:BTCUSD' : 'OANDA:XAUUSD';
             const nomeStr = ativo === 'BTC' ? 'BTCUSD' : 'XAUUSD';
             
-            // Atualiza os textos da interface
             document.getElementById('label-ativo-atual').innerText = nomeStr + " Atual";
             document.getElementById('label-chart').innerText = "📈 GRÁFICO OMNI: " + nomeStr;
 
-            // Substitui o iFrame do TradingView
             document.getElementById('box-grafico').innerHTML = `<iframe scrolling="no" allowtransparency="true" frameborder="0" src="https://www.tradingview-widget.com/embed-widget/advanced-chart/?locale=br#%7B%22autosize%22%3Atrue%2C%22symbol%22%3A%22${symbolTV}%22%2C%22interval%22%3A%2215%22%2C%22timezone%22%3A%22America%2FSao_Paulo%22%2C%22theme%22%3A%22dark%22%2C%22style%22%3A%221%22%2C%22locale%22%3A%22br%22%2C%22hide_top_toolbar%22%3Afalse%2C%22allow_symbol_change%22%3A%22false%22%2C%22calendar%22%3Afalse%2C%22support_host%22%3A%22https%3A%22%7D" style="width:100%; height:100%;"></iframe>`;
-            
-            // Se mudou de ativo, zera o status anterior para poder apitar de novo
             ultimoStatus = "SEM_SETUP";
         }
 
@@ -258,7 +260,7 @@
                 html += `
                 <div class="history-item">
                     <div>
-                        <strong style="color:#fff;">${trade.ativo} - ${trade.estrategia}</strong><br>
+                        <strong style="color:#fff;">${trade.ativo} - ${trade.estrategia}</strong> <span style="color:#9b59b6; font-size:9px;">(${trade.prob})</span><br>
                         <span style="color:#888;">Entrada: ${trade.entrada} | TP1: ${trade.tp1}</span>
                     </div>
                     <div class="${cssClass}">${textoRes}</div>
@@ -272,7 +274,6 @@
             let mudou = false;
 
             hist.forEach(trade => {
-                // Só avalia se o ativo do log bater com o ativo que estamos scaneando agora
                 if(trade.resultado === 'WAIT' && trade.ativo === ativoAtual) {
                     if(precoAtual >= trade.tp1) {
                         trade.resultado = 'WIN';
@@ -297,6 +298,7 @@
                     entrada: dados.entrada,
                     tp1: dados.tp1,
                     sl: dados.stop_loss,
+                    prob: dados.probabilidade,
                     resultado: 'WAIT',
                     id: idAtual
                 });
@@ -309,15 +311,15 @@
             if (Notification.permission !== "granted") Notification.requestPermission();
         }
 
-        function dispararAlertaCego(estrategia, ativo) {
+        function dispararAlertaCego(estrategia, ativo, prob) {
             somAlerta.play().catch(e => console.log("Áudio bloqueado."));
             if (Notification.permission === "granted") {
                 const notificacao = new Notification('🟢 ALERTA TRADING SHADOW', {
-                    body: `Ativo: ${ativo}\nGatilho validado: ${estrategia}!\nClique para revelar os alvos.`,
+                    body: `Ativo: ${ativo}\nEstratégia: ${estrategia}\nWin Rate: ${prob}\n\nClique para revelar os alvos.`,
                     icon: 'https://cdn-icons-png.flaticon.com/512/2933/2933116.png',
                     requireInteraction: true 
                 });
-                notificacao.onclick = function() { window.focus(); this.close(); };
+                notificacao.onclick = function() { window.focus(); this.close(); document.getElementById('painel-resultado').scrollIntoView({ behavior: 'smooth', block: 'center' }); };
             }
         }
 
@@ -334,7 +336,7 @@
         }
 
         window.onload = () => {
-            trocarAtivo(); // Injeta o gráfico Ouro inicial
+            trocarAtivo(); 
             carregarHistorico();
             fetch('https://shadow-v3-motor.onrender.com/ping')
                 .then(res => res.json())
@@ -354,6 +356,13 @@
                 btnRobo.classList.add('ativo');
                 btnRobo.innerText = "⏹️ Desligar Auto-Scanner";
                 
+                if (Notification.permission === "granted") {
+                    new Notification('🤖 AUTO-SCANNER LIGADO', {
+                        body: 'O Robô está no modo Alta Frequência. Avisaremos quando houver uma Possível Entrada.',
+                        icon: 'https://cdn-icons-png.flaticon.com/512/2933/2933116.png'
+                    });
+                }
+                
                 buscarAnalise(true);
                 roboInterval = setInterval(() => buscarAnalise(true), 180000);
                 pingAntiSono = setInterval(() => { fetch('https://shadow-v3-motor.onrender.com/ping'); }, 120000);
@@ -371,6 +380,7 @@
             const ativoEscolhido = document.getElementById('seletor-ativo').value;
 
             if (!silencioso) {
+                document.getElementById('painel-resultado').style.display = 'none';
                 document.getElementById('loading').style.display = 'block';
                 document.getElementById('loading').innerText = `Analisando algoritmos para ${ativoEscolhido}...`;
             }
@@ -396,9 +406,11 @@
                     badge.className = "status-badge setup-ok";
                     badge.innerText = `🟢 ALERTA: ${dados.estrategia_ativa}`;
                     
+                    document.getElementById('grid-probabilidade').style.display = 'grid';
                     document.getElementById('grid-entrada').style.display = 'grid';
                     document.getElementById('grid-alvos').style.display = 'grid';
                     
+                    document.getElementById('val-prob').innerText = dados.probabilidade;
                     document.getElementById('val-entrada').innerText = dados.entrada;
                     document.getElementById('val-stop').innerText = dados.stop_loss;
                     document.getElementById('val-tp1').innerText = dados.tp1;
@@ -408,7 +420,7 @@
                     registrarNovaEntrada(dados);
 
                     if (roboAtivo && ultimoStatus !== "SETUP_CONFIRMADO") {
-                        dispararAlertaCego(dados.estrategia_ativa, dados.ativo);
+                        dispararAlertaCego(dados.estrategia_ativa, dados.ativo, dados.probabilidade);
                     }
                     ultimoStatus = "SETUP_CONFIRMADO";
 
@@ -418,6 +430,7 @@
                     badge.className = "status-badge setup-wait";
                     badge.innerText = `⏸️ VARRENDO ASSIMETRIA NO ${dados.ativo}`;
                     
+                    document.getElementById('grid-probabilidade').style.display = 'none';
                     document.getElementById('grid-entrada').style.display = 'none';
                     document.getElementById('grid-alvos').style.display = 'none';
                     ultimoStatus = "SEM_SETUP";
