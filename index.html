@@ -24,20 +24,20 @@
         .header-purple { color: #9b59b6; border-left: 3px solid #9b59b6; }
         
         .btn-consultar-payroll { background: #8e44ad; color: #fff; border: none; padding: 4px 8px; font-size: 10px; font-weight: bold; border-radius: 3px; cursor: pointer; text-transform: uppercase; transition: 0.2s; }
-        .btn-consultar-payroll:hover { background: #9b59b6; }
-
+        
         .control-panel { background: #121218; padding: 15px; border-radius: 4px; border: 1px solid #1f1f2e; margin-bottom: 20px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
         .omni-title { font-weight: bold; color: #00E676; text-transform: uppercase; font-size: 13px; letter-spacing: 1px; flex-grow: 1; }
         
         .select-ativo { background: #1a1a24; color: #fff; border: 1px solid #282838; padding: 10px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; outline: none; }
-        .select-ativo option { background: #121218; }
         
         .btn-analisar { background-color: #00E676; color: #000; border: none; padding: 10px 15px; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 13px; text-transform: uppercase; transition: 0.2s; }
-        .btn-analisar:hover { background-color: #00c853; }
+        .btn-teste { background-color: #f39c12; color: #000; border: none; padding: 10px 15px; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 13px; text-transform: uppercase; transition: 0.2s; }
         
         .btn-robo { background-color: #8e44ad; color: #fff; border: none; padding: 12px 25px; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 14px; text-transform: uppercase; transition: 0.2s; box-shadow: 0 0 10px rgba(142,68,173,0.4); margin-left: auto; }
         .btn-robo.ativo { background-color: #e74c3c; box-shadow: 0 0 15px rgba(231,76,60,0.6); animation: pulsarRobo 1.5s infinite; }
         @keyframes pulsarRobo { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+
+        .warning-box { background: rgba(243, 156, 18, 0.1); border: 1px solid #f39c12; color: #f39c12; padding: 10px; font-size: 11px; border-radius: 4px; margin-bottom: 15px; display: none; }
 
         .grid-layout { display: grid; grid-template-columns: 350px 1fr; gap: 20px; }
         @media (max-width: 900px) { .grid-layout { grid-template-columns: 1fr; } }
@@ -80,6 +80,10 @@
             </div>
         </div>
 
+        <div class="warning-box" id="aviso-tela">
+            ⚠️ <b>Atenção:</b> Para o Auto-Scanner funcionar e mandar sinais de áudio, <b>NÃO</b> feche nem minimize esta aba. Mantenha a tela do celular ligada nesta página. Um sistema Anti-Dormir foi ativado.
+        </div>
+
         <div class="macro-dashboard">
             <div class="macro-card">
                 <div class="macro-header header-orange">📰 AGENDA DÓLAR (FILTRADA: ALTO IMPACTO)</div>
@@ -107,7 +111,7 @@
                     <button class="btn-consultar-payroll" onclick="buscarRadarMensal()">🔍 Consultar</button>
                 </div>
                 <div class="payroll-box" id="texto-radar-mensal">
-                    <span style="color: #888; font-style: italic;">Clique em "Consultar" acima para gerar a análise macroeconômica do Payroll e FOMC via IA.</span>
+                    <span style="color: #888; font-style: italic;">Clique em "Consultar" acima para gerar a análise macroeconômica.</span>
                 </div>
             </div>
         </div>
@@ -120,7 +124,8 @@
                 <option value="BTC">₿ BITCOIN (BTC/USD)</option>
             </select>
 
-            <button class="btn-analisar" onclick="buscarAnalise(false)">Varredura Rápida</button>
+            <button class="btn-analisar" onclick="buscarAnalise(false, false)">Varredura Rápida</button>
+            <button class="btn-teste" onclick="buscarAnalise(false, true)">🔔 Forçar Teste de Sinal</button>
             <button class="btn-robo" id="btn-robo" onclick="toggleRobo()">🤖 Ligar Auto-Scanner</button>
         </div>
 
@@ -131,7 +136,6 @@
                 <div class="card" id="painel-resultado" style="display: block;">
                     <div id="badge-status" class="status-badge setup-wait">⏸️ AGUARDANDO ESTRUTURA</div>
                     
-                    <!-- NOVO: VISOR DE PROBABILIDADE -->
                     <div class="info-grid" id="grid-probabilidade" style="display: none; grid-template-columns: 1fr;">
                         <div class="info-box" style="background-color: rgba(142,68,173,0.1); border-color: #8e44ad; padding: 15px;">
                             <div class="info-label" style="color:#9b59b6; font-size: 11px;">Chance de Acerto (Win Rate)</div>
@@ -177,9 +181,8 @@
                     </div>
 
                     <div style="font-size: 11px; color: #00E676; text-transform: uppercase; margin-bottom: 5px; font-weight: bold;">🧠 Decisão do Analista:</div>
-                    <div class="ai-box" id="texto-ia">Motor pronto. Aguardando inicialização da varredura...</div>
+                    <div class="ai-box" id="texto-ia">Motor pronto. Aguardando inicialização...</div>
 
-                    <!-- MÓDULO DE HISTÓRICO -->
                     <div class="history-container">
                         <div class="history-title">
                             <span>📜 LOG DE OPERAÇÕES</span>
@@ -192,7 +195,6 @@
                 </div>
             </div>
 
-            <!-- GRÁFICO DINÂMICO -->
             <div>
                 <div class="card" style="display: block; padding: 0;">
                     <div style="padding: 10px; font-size: 11px; background: #1a1a24; border-bottom: 1px solid #1f1f2e; color: #888; display: flex; justify-content: space-between;">
@@ -214,8 +216,29 @@
         let pingAntiSono = null;
         let ultimoStatus = "SEM_SETUP";
         let ultimoGatilhoID = null;
+        let wakeLock = null; // Impede a tela do celular de apagar
 
         const somAlerta = new Audio('https://www.myinstants.com/media/sounds/message-tone.mp3');
+
+        // FUNÇÃO ANTI-DORMIR (Screen Wake Lock API)
+        async function solicitarWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    wakeLock.addEventListener('release', () => {
+                        console.log('Wake Lock foi liberado.');
+                    });
+                }
+            } catch (err) {
+                console.error(`${err.name}, ${err.message}`);
+            }
+        }
+
+        function liberarWakeLock() {
+            if (wakeLock !== null) {
+                wakeLock.release().then(() => { wakeLock = null; });
+            }
+        }
 
         function trocarAtivo() {
             const ativo = document.getElementById('seletor-ativo').value;
@@ -289,6 +312,7 @@
         }
 
         function registrarNovaEntrada(dados) {
+            if(dados.estrategia_ativa === "TESTE DE SISTEMA") return; // Não salva testes no histórico
             let idAtual = dados.ativo + dados.estrategia_ativa + dados.data_hora;
             if(ultimoGatilhoID !== idAtual) {
                 let hist = carregarHistorico();
@@ -312,14 +336,20 @@
         }
 
         function dispararAlertaCego(estrategia, ativo, prob) {
-            somAlerta.play().catch(e => console.log("Áudio bloqueado."));
+            // Se o usuário clicar na página, libera o áudio (política do navegador)
+            somAlerta.play().catch(e => console.log("Áudio bloqueado pelo navegador."));
+            
             if (Notification.permission === "granted") {
                 const notificacao = new Notification('🟢 ALERTA TRADING SHADOW', {
-                    body: `Ativo: ${ativo}\nEstratégia: ${estrategia}\nWin Rate: ${prob}\n\nClique para revelar os alvos.`,
+                    body: `Ativo: ${ativo}\nEstratégia: ${estrategia}\nWin Rate: ${prob}\n\nClique para abrir!`,
                     icon: 'https://cdn-icons-png.flaticon.com/512/2933/2933116.png',
                     requireInteraction: true 
                 });
-                notificacao.onclick = function() { window.focus(); this.close(); document.getElementById('painel-resultado').scrollIntoView({ behavior: 'smooth', block: 'center' }); };
+                notificacao.onclick = function() { 
+                    window.focus(); 
+                    this.close(); 
+                    document.getElementById('painel-resultado').scrollIntoView({ behavior: 'smooth', block: 'center' }); 
+                };
             }
         }
 
@@ -352,41 +382,46 @@
             const btnRobo = document.getElementById('btn-robo');
             if (!roboAtivo) {
                 pedirPermissaoNotificacao();
+                solicitarWakeLock(); // Trava a tela para não dormir
                 roboAtivo = true;
                 btnRobo.classList.add('ativo');
                 btnRobo.innerText = "⏹️ Desligar Auto-Scanner";
+                document.getElementById('aviso-tela').style.display = 'block';
                 
-                if (Notification.permission === "granted") {
-                    new Notification('🤖 AUTO-SCANNER LIGADO', {
-                        body: 'O Robô está no modo Alta Frequência. Avisaremos quando houver uma Possível Entrada.',
-                        icon: 'https://cdn-icons-png.flaticon.com/512/2933/2933116.png'
-                    });
-                }
-                
-                buscarAnalise(true);
-                roboInterval = setInterval(() => buscarAnalise(true), 180000);
+                buscarAnalise(true, false);
+                roboInterval = setInterval(() => buscarAnalise(true, false), 180000);
                 pingAntiSono = setInterval(() => { fetch('https://shadow-v3-motor.onrender.com/ping'); }, 120000);
             } else {
                 roboAtivo = false;
+                liberarWakeLock();
                 btnRobo.classList.remove('ativo');
                 btnRobo.innerText = "🤖 Ligar Auto-Scanner";
+                document.getElementById('aviso-tela').style.display = 'none';
                 clearInterval(roboInterval);
                 clearInterval(pingAntiSono);
                 ultimoStatus = "SEM_SETUP";
             }
         }
 
-        async function buscarAnalise(silencioso = false) {
+        async function buscarAnalise(silencioso = false, forcarTeste = false) {
+            pedirPermissaoNotificacao(); // Garante permissão ao clicar no botão
+            
             const ativoEscolhido = document.getElementById('seletor-ativo').value;
+            let url = `https://shadow-v3-motor.onrender.com/analisar?ativo=${ativoEscolhido}`;
+            
+            if (forcarTeste) {
+                url += `&teste=true`;
+                silencioso = false;
+            }
 
             if (!silencioso) {
                 document.getElementById('painel-resultado').style.display = 'none';
                 document.getElementById('loading').style.display = 'block';
-                document.getElementById('loading').innerText = `Analisando algoritmos para ${ativoEscolhido}...`;
+                document.getElementById('loading').innerText = forcarTeste ? "Forçando disparo de teste..." : `Analisando ${ativoEscolhido}...`;
             }
 
             try {
-                const resposta = await fetch(`https://shadow-v3-motor.onrender.com/analisar?ativo=${ativoEscolhido}`);
+                const resposta = await fetch(url);
                 const dados = await resposta.json();
                 
                 if (!silencioso) document.getElementById('loading').style.display = 'none';
@@ -398,7 +433,7 @@
                 document.getElementById('val-preco').innerText = dados.preco_atual;
                 document.getElementById('val-poc').innerText = dados.poc_volume;
                 
-                avaliarOperacoesAbertas(dados.preco_atual, dados.ativo);
+                if(!forcarTeste) avaliarOperacoesAbertas(dados.preco_atual, dados.ativo);
 
                 if(dados.status === "SETUP_CONFIRMADO") {
                     painel.style.borderLeftColor = "#00E676";
@@ -419,7 +454,8 @@
 
                     registrarNovaEntrada(dados);
 
-                    if (roboAtivo && ultimoStatus !== "SETUP_CONFIRMADO") {
+                    // Dispara o alerta se for teste OU se o robô estiver ativo e for um sinal novo
+                    if (forcarTeste || (roboAtivo && ultimoStatus !== "SETUP_CONFIRMADO")) {
                         dispararAlertaCego(dados.estrategia_ativa, dados.ativo, dados.probabilidade);
                     }
                     ultimoStatus = "SETUP_CONFIRMADO";
@@ -437,7 +473,8 @@
                 }
             } catch (erro) {
                 if (!silencioso) {
-                    document.getElementById('loading').innerText = "Falha de conexão com o robô.";
+                    document.getElementById('loading').style.display = 'block';
+                    document.getElementById('loading').innerText = "Aguardando abertura do mercado ou liquidez do ativo.";
                 }
             }
         }
