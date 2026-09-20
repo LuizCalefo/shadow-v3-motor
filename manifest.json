@@ -1,0 +1,15 @@
+{
+  "name": "Trading Shadow Quant",
+  "short_name": "Shadow",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#050507",
+  "theme_color": "#050507",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2933/2933116.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
