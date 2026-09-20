@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Trading Shadow Quant</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#050507">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -15,8 +17,6 @@
         
         .widgets-macro { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px; }
         @media (max-width: 900px) { .widgets-macro { grid-template-columns: 1fr; } }
-        
-        /* CORREÇÃO DE INTERFACE: Caixas expansíveis */
         .macro-card { background: #121218; border: 1px solid #282838; border-radius: 4px; overflow: hidden; display: flex; flex-direction: column; min-height: 280px; height: auto; }
         .macro-header { padding: 10px; font-size: 11px; background: #1a1a24; border-bottom: 1px solid #1f1f2e; font-weight: bold; }
         
@@ -29,14 +29,12 @@
         .score-win { font-size: 36px; color: #00E676; font-weight: bold; text-shadow: 0 0 10px rgba(0,230,118,0.3); }
         .score-loss { font-size: 36px; color: #FF1744; font-weight: bold; text-shadow: 0 0 10px rgba(255,23,68,0.3); }
         
-        /* CORREÇÃO DE INTERFACE: Gráfico de Pizza travado no tamanho certo */
         .pizza-wrapper { display: flex; justify-content: center; align-items: center; width: 100%; }
         .pizza-container { width: 130px; height: 130px; position: relative; }
 
         .control-panel { background: #1a1a24; padding: 15px; border-radius: 4px; border: 1px solid #1f1f2e; margin-bottom: 20px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
         .omni-title { font-weight: bold; color: #00E676; text-transform: uppercase; font-size: 13px; flex-grow: 1; min-width: 100%; margin-bottom: 5px; text-align: center;}
         
-        /* CORREÇÃO DE INTERFACE: Gestão de risco responsiva */
         .risk-box { display: flex; gap: 15px; align-items: center; justify-content: center; background: #121218; padding: 10px 15px; border: 1px solid #282838; border-radius: 4px; font-size: 12px; flex-wrap: wrap; width: 100%; margin-bottom: 10px;}
         .risk-input { background: #0c0c10; color: #fff; border: 1px solid #282838; padding: 6px; width: 90px; border-radius: 3px; font-family: inherit; font-weight: bold; text-align: center;}
         
@@ -52,8 +50,7 @@
 
         .warning-box { background: rgba(0, 230, 118, 0.1); border: 1px solid #00E676; color: #00E676; padding: 10px; font-size: 11px; border-radius: 4px; margin-bottom: 15px; display: none; text-align: center; }
         .error-box { background: rgba(255, 23, 68, 0.1); border: 1px solid #FF1744; color: #FF1744; padding: 10px; font-size: 11px; border-radius: 4px; margin-bottom: 15px; display: none; text-align: center;}
-        .shield-box { background: rgba(243, 156, 18, 0.1); border: 1px solid #f39c12; color: #f39c12; padding: 10px; font-size: 11px; border-radius: 4px; margin-bottom: 15px; display: none; font-weight: bold; text-align: center;}
-
+        
         .grid-layout { display: grid; grid-template-columns: 350px 1fr; gap: 20px; }
         @media (max-width: 900px) { .grid-layout { grid-template-columns: 1fr; } }
 
@@ -67,8 +64,6 @@
         .tatico-row { margin-bottom: 8px; font-size: 12px; display: flex; justify-content: space-between;}
         .tatico-label { color: #888; font-weight: bold; }
         .lote-sugerido { background: #ff9800; color: #000; padding: 2px 8px; border-radius: 3px; font-weight: bold; }
-        
-        /* CORREÇÃO DE INTERFACE: Quebra de texto garantida */
         .tatico-caixa-texto { background: rgba(142,68,173,0.1); padding: 10px; border-radius: 4px; border-left: 3px solid #8e44ad; font-size: 11px; line-height: 1.5; color: #ccc; margin-top: 10px; word-break: break-word; }
         
         .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 15px; }
@@ -81,15 +76,15 @@
         .history-container { margin-top: 15px; border-top: 1px solid #1f1f2e; padding-top: 15px; }
         .history-title { font-size: 11px; color: #4facfe; font-weight: bold; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;}
         
-        /* CORREÇÃO DE INTERFACE: Scroll no Histórico */
         #lista-historico { max-height: 250px; overflow-y: auto; padding-right: 5px; }
         #lista-historico::-webkit-scrollbar { width: 5px; }
         #lista-historico::-webkit-scrollbar-thumb { background: #282838; border-radius: 5px; }
 
         .history-item { background: #1a1a24; border: 1px solid #282838; padding: 10px; border-radius: 4px; font-size: 11px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
-        .res-win { color: #00E676; font-weight: bold; font-size: 12px;}
-        .res-loss { color: #FF1744; font-weight: bold; font-size: 12px;}
-        .res-wait { color: #ff9800; font-weight: bold; font-size: 12px;}
+        .res-win { color: #00E676; font-weight: bold; font-size: 11px;}
+        .res-loss { color: #FF1744; font-weight: bold; font-size: 11px;}
+        .res-wait { color: #ff9800; font-weight: bold; font-size: 11px;}
+        .res-break { color: #4facfe; font-weight: bold; font-size: 11px;}
         
         .btn-exportar { background: #3498db; color: #fff; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 10px; font-weight: bold; margin-left: 10px;}
         .btn-ver { background: #8e44ad; color: #fff; border: none; padding: 6px 10px; border-radius: 3px; cursor: pointer; font-size: 10px; font-weight: bold; transition: 0.2s;}
@@ -104,21 +99,19 @@
     <div class="terminal">
         <div class="topbar">
             <div class="logo">TRADING SHADOW</div>
-            <span style="color:#888; font-size: 11px;">Mesa Proprietária Conectada ☁️</span>
+            <span style="color:#888; font-size: 11px;">Mesa Quantitativa 360º ☁️</span>
         </div>
 
         <div class="warning-box" id="aviso-tela">
-            ✔️ <b>Proteção Ativada:</b> Scanner a funcionar. Atualizar o ecrã não irá quebrar o ciclo de pesquisa.
+            ✔️ <b>Radar 360º Ativo:</b> A varrer XAU, BTC e EUR/USD em simultâneo. Proteção Breakeven ativada.
         </div>
         
         <div class="error-box" id="aviso-mercado"></div>
-        <div class="shield-box" id="aviso-escudo">🛡️ ESCUDO DE NOTÍCIAS ATIVO: Volatilidade iminente. O robô pausou as entradas temporariamente por segurança.</div>
 
         <div class="widgets-macro">
             <div class="macro-card">
                 <div class="macro-header" style="color: #4facfe; border-left: 3px solid #4facfe;">💵 ÍNDICE DÓLAR (DXY)</div>
                 <div style="flex-grow: 1;">
-                    <!-- Ajustado para Capital.com para maior compatibilidade -->
                     <iframe scrolling="no" allowtransparency="true" frameborder="0" src="https://www.tradingview-widget.com/embed-widget/mini-symbol-overview/?locale=br#%7B%22symbol%22%3A%22CAPITALCOM%3ADXY%22%2C%22width%22%3A%22100%25%22%2C%22height%22%3A%22100%25%22%2C%22dateRange%22%3A%221M%22%2C%22colorTheme%22%3A%22dark%22%2C%22trendLineColor%22%3A%22%2337a6ef%22%2C%22underLineColor%22%3A%22rgba(55%2C%20166%2C%20239%2C%200.3)%22%2C%22underLineBottomColor%22%3A%22rgba(55%2C%20166%2C%20239%2C%200)%22%2C%22isTransparent%22%3Atrue%2C%22autosize%22%3Atrue%2C%22largeChartUrl%22%3A%22%22%7D" style="width:100%; height:100%;"></iframe>
                 </div>
             </div>
@@ -133,7 +126,7 @@
             <div class="macro-card">
                 <div class="macro-header" style="color: #9b59b6; border-left: 3px solid #9b59b6;">🇺🇸 EXPECTATIVA PAYROLL / FOMC</div>
                 <div class="payroll-box" id="texto-radar-mensal">
-                    <i>A sincronizar Inteligência Institucional com a base de dados do FED...</i>
+                    <i>A sincronizar Inteligência Institucional...</i>
                 </div>
             </div>
         </div>
@@ -157,7 +150,7 @@
         </div>
 
         <div class="control-panel">
-            <div class="omni-title">⚡ Scanner Institucional Híbrido</div>
+            <div class="omni-title">⚡ Scanner 360º Multi-Ativos (ATR & Breakeven)</div>
             
             <div class="risk-box">
                 <label style="color:#888;">Banca (USD): <input type="number" id="val-banca" class="risk-input" value="1000"></label>
@@ -168,11 +161,12 @@
                 <select id="seletor-ativo" class="select-ativo" onchange="trocarAtivo()">
                     <option value="XAU">🪙 OURO (XAU/USD)</option>
                     <option value="BTC">₿ BITCOIN (BTC/USD)</option>
+                    <option value="EUR">💶 EURO (EUR/USD)</option>
                 </select>
 
-                <button class="btn-analisar" onclick="buscarAnalise(false, false)">Varredura</button>
-                <button class="btn-teste" onclick="buscarAnalise(false, true)">🔔 Testar</button>
-                <button class="btn-robo" id="btn-robo" onclick="toggleRobo(false)">🤖 Ligar Scanner</button>
+                <button class="btn-analisar" onclick="iniciarVarreduraUnica(false)">Varredura</button>
+                <button class="btn-teste" onclick="buscarAnalise('XAU', false, true)">🔔 Testar</button>
+                <button class="btn-robo" id="btn-robo" onclick="toggleRobo(false)">🤖 Ligar Radar 360º</button>
             </div>
         </div>
 
@@ -186,10 +180,9 @@
                     <div id="painel-tatico" class="painel-tatico">
                         <div class="tatico-header" id="tat-titulo">⚡ RELATÓRIO TÁTICO DE ENTRADA</div>
                         <div class="tatico-row"><span class="tatico-label">Ativo:</span> <span id="tat-ativo" style="color:#fff; font-weight:bold;">--</span></div>
-                        <div class="tatico-row"><span class="tatico-label">Macro Tendência (H1/H4):</span> <span id="tat-macro" style="color:#4facfe; font-weight:bold;">--</span></div>
+                        <div class="tatico-row"><span class="tatico-label">Volatilidade (ATR):</span> <span id="tat-atr" style="color:#4facfe; font-weight:bold;">--</span></div>
                         <div class="tatico-row"><span class="tatico-label">Estratégia Confirmada:</span> <span id="tat-estrategia" style="color:#fff; font-weight:bold;">--</span></div>
-                        <div class="tatico-row"><span class="tatico-label">Probabilidade Win:</span> <span id="tat-prob" style="color:#00E676; font-size:16px; font-weight:bold;">--</span></div>
-                        <div class="tatico-row"><span class="tatico-label">Lote Sugerido (MT4/5):</span> <span id="tat-lote" class="lote-sugerido">--</span></div>
+                        <div class="tatico-row"><span class="tatico-label">Lote (MT4/5):</span> <span id="tat-lote" class="lote-sugerido">--</span></div>
                         <div class="tatico-caixa-texto"><strong style="color:#9b59b6;">Lógica:</strong> <span id="tat-explica">--</span></div>
                     </div>
 
@@ -199,7 +192,7 @@
                     </div>
 
                     <div class="info-grid" id="grid-alvos" style="display: none; grid-template-columns: 1fr 1fr 1fr;">
-                        <div class="info-box"><div class="info-label">TP 1</div><div class="info-value" id="val-tp1" style="color: #00E676; font-size:12px;">--</div></div>
+                        <div class="info-box"><div class="info-label">TP 1 (Breakeven)</div><div class="info-value" id="val-tp1" style="color: #00E676; font-size:12px;">--</div></div>
                         <div class="info-box"><div class="info-label">TP 2</div><div class="info-value" id="val-tp2" style="color: #00E676; font-size:12px;">--</div></div>
                         <div class="info-box"><div class="info-label">TP 3</div><div class="info-value" id="val-tp3" style="color: #00E676; font-size:12px;">--</div></div>
                     </div>
@@ -220,38 +213,41 @@
             <div>
                 <div class="card" style="display: block; padding: 0;">
                     <div style="padding: 10px; font-size: 11px; background: #1a1a24; border-bottom: 1px solid #1f1f2e; color: #888; display: flex; justify-content: space-between;">
-                        <span id="label-chart">📈 GRÁFICO OMNI: XAUUSD</span>
+                        <span id="label-chart">📈 GRÁFICO OMNI</span>
                         <span style="color: #00E676; font-weight:bold;">15 MIN</span>
                     </div>
                     <div class="chart-container" id="box-grafico"></div>
                 </div>
             </div>
         </div>
-        <div class="footer">Implementação Quantitativa - Lemos</div>
+        <div class="footer">Terminal Quantitativo 360º - Lemos</div>
     </div>
 
     <script>
+        // SERVICE WORKER PARA TRANSFORMAÇÃO EM APP PWA
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').then(function() { console.log('PWA Service Worker Registado.'); });
+        }
+
         let roboAtivo = false;
         let roboInterval = null;
         let ultimoStatus = "SEM_SETUP";
         let ultimoGatilhoID = null;
         let graficoPizzaObj = null;
+        const ativosParaVarrer = ['XAU', 'BTC', 'EUR'];
         
-        // 🔊 AUDIOS PSICOLÓGICOS INSTITUCIONAIS
+        // 🔊 AUDIOS
         const somSinal = new Audio('https://www.myinstants.com/media/sounds/message-tone.mp3');
         const somWin = new Audio('https://www.myinstants.com/media/sounds/cash-register-kaching.mp3');
         const somLoss = new Audio('https://www.myinstants.com/media/sounds/error_CDaO8B2.mp3');
+        const somBreakeven = new Audio('https://www.myinstants.com/media/sounds/ding-sound-effect_2.mp3'); // Sino suave
 
         window.onload = async () => {
             trocarAtivo(); 
             iniciarGraficoPizza();
             buscarRadarMensal(); 
-            
             await carregarHistoricoNuvem();
-
-            if(localStorage.getItem('roboLigado') === 'true') {
-                toggleRobo(true); 
-            }
+            if(localStorage.getItem('roboLigado') === 'true') { toggleRobo(true); }
         };
 
         async function baixarRelatorio() {
@@ -265,7 +261,7 @@
             let encodedUri = encodeURI(csvContent);
             let link = document.createElement("a");
             link.setAttribute("href", encodedUri);
-            link.setAttribute("download", "TradingShadow_Relatorio_Diario.csv");
+            link.setAttribute("download", "TradingShadow_Diario.csv");
             document.body.appendChild(link);
             link.click();
         }
@@ -279,8 +275,9 @@
             let lote = 0;
             if (ativo === 'XAUUSD') lote = riscoFinanceiro / (distanciaStop * 100);
             else if (ativo === 'BTCUSD') lote = riscoFinanceiro / distanciaStop;
+            else if (ativo === 'EURUSD') lote = riscoFinanceiro / (distanciaStop * 100000);
             
-            if (lote < 0.01) return "Lote mínimo (0.01) arriscado!";
+            if (lote < 0.01) return "Lote mín (0.01) arriscado!";
             return lote.toFixed(2) + " Lotes";
         }
 
@@ -288,10 +285,7 @@
             const ctx = document.getElementById('graficoPizza').getContext('2d');
             graficoPizzaObj = new Chart(ctx, {
                 type: 'doughnut',
-                data: {
-                    labels: ['WINS', 'LOSSES'],
-                    datasets: [{ data: [0, 0], backgroundColor: ['#00E676', '#FF1744'], borderWidth: 0, hoverOffset: 4 }]
-                },
+                data: { labels: ['WINS', 'LOSSES'], datasets: [{ data: [0, 0], backgroundColor: ['#00E676', '#FF1744'], borderWidth: 0, hoverOffset: 4 }] },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, cutout: '75%' }
             });
         }
@@ -302,10 +296,8 @@
                 if(t.resultado === 'WIN') wins++;
                 if(t.resultado === 'LOSS') losses++;
             });
-
             document.getElementById('num-wins').innerText = wins;
             document.getElementById('num-losses').innerText = losses;
-
             if(wins === 0 && losses === 0) {
                 graficoPizzaObj.data.datasets[0].data = [1, 0];
                 graficoPizzaObj.data.datasets[0].backgroundColor = ['#282838', '#282838'];
@@ -330,9 +322,7 @@
             renderizarHistorico(hist);
             atualizarPlacarEPizza(hist);
             await fetch('https://shadow-v3-motor.onrender.com/sync-historico', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(hist)
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(hist)
             });
         }
 
@@ -340,15 +330,12 @@
 
         function renderizarHistorico(hist) {
             const container = document.getElementById('lista-historico');
-            if(hist.length === 0) {
-                container.innerHTML = '<div style="color:#888; font-size: 10px;">Nenhuma operação na nuvem.</div>';
-                return;
-            }
+            if(hist.length === 0) { container.innerHTML = '<div style="color:#888; font-size: 10px;">Nenhuma operação na nuvem.</div>'; return; }
             
             let html = '';
             hist.slice().reverse().forEach(trade => {
-                let cssClass = trade.resultado === 'WIN' ? 'res-win' : (trade.resultado === 'LOSS' ? 'res-loss' : 'res-wait');
-                let textoRes = trade.resultado === 'WAIT' ? '⏳ Espera' : (trade.resultado === 'WIN' ? '🟢 WIN' : '🔴 LOSS');
+                let cssClass = trade.resultado === 'WIN' ? 'res-win' : (trade.resultado === 'LOSS' ? 'res-loss' : (trade.resultado === 'BREAKEVEN' ? 'res-break' : 'res-wait'));
+                let textoRes = trade.resultado === 'WAIT' ? '⏳ Espera' : (trade.resultado === 'BREAKEVEN' ? '🛡️ ZERO RISCO' : (trade.resultado === 'WIN' ? '🟢 WIN' : '🔴 LOSS'));
                 
                 html += `
                 <div class="history-item">
@@ -366,15 +353,13 @@
         async function reverAnalise(idTrade) {
             const hist = await carregarHistoricoNuvem();
             const trade = hist.find(t => t.id === idTrade);
-            
             if (trade) {
                 const painel = document.getElementById('painel-resultado');
                 document.getElementById('painel-tatico').style.display = 'block';
                 document.getElementById('tat-titulo').innerText = "🔍 REVISÃO TÁTICA (PASSADO)";
                 document.getElementById('tat-ativo').innerText = trade.ativo;
                 document.getElementById('tat-estrategia').innerText = trade.estrategia;
-                document.getElementById('tat-prob').innerText = trade.prob || "N/A";
-                document.getElementById('tat-macro').innerText = "Gravado no log";
+                document.getElementById('tat-atr').innerText = "N/A";
                 document.getElementById('tat-lote').innerText = "Análise passada";
                 document.getElementById('tat-explica').innerText = "Dados resgatados da nuvem.";
 
@@ -389,23 +374,55 @@
             }
         }
 
+        // 🛡️ NOVIDADE: GESTÃO DE POSIÇÃO (BREAKEVEN)
         async function avaliarOperacoesAbertas(precoAtual, ativoAtual) {
             let hist = await carregarHistoricoNuvem();
             let mudou = false;
 
             hist.forEach(trade => {
+                // Checa TP1 para proteger o trade (Breakeven)
                 if(trade.resultado === 'WAIT' && trade.ativo === ativoAtual) {
-                    if(precoAtual >= trade.tp1) { 
-                        trade.resultado = 'WIN'; mudou = true; 
-                        somWin.play().catch(e=>console.log(e));
-                    } 
-                    else if (precoAtual <= trade.sl) { 
-                        trade.resultado = 'LOSS'; mudou = true; 
-                        somLoss.play().catch(e=>console.log(e));
+                    // Compra
+                    if(trade.tp1 > trade.entrada) {
+                        if(precoAtual >= trade.tp1) { 
+                            trade.resultado = 'BREAKEVEN'; mudou = true; 
+                            dispararAlertaBreakeven(trade.ativo);
+                        } else if (precoAtual <= trade.sl) { 
+                            trade.resultado = 'LOSS'; mudou = true; somLoss.play().catch(e=>console.log(e));
+                        }
+                    }
+                    // Venda
+                    else if(trade.tp1 < trade.entrada) {
+                        if(precoAtual <= trade.tp1) { 
+                            trade.resultado = 'BREAKEVEN'; mudou = true; 
+                            dispararAlertaBreakeven(trade.ativo);
+                        } else if (precoAtual >= trade.sl) { 
+                            trade.resultado = 'LOSS'; mudou = true; somLoss.play().catch(e=>console.log(e));
+                        }
+                    }
+                }
+                // Checa TP FINAL (Se já estava em Breakeven e bate no TP2 ou 3)
+                else if(trade.resultado === 'BREAKEVEN' && trade.ativo === ativoAtual) {
+                    if(trade.tp1 > trade.entrada) {
+                        if(precoAtual >= trade.tp2) { trade.resultado = 'WIN'; mudou = true; somWin.play().catch(e=>console.log(e)); }
+                        else if(precoAtual <= trade.entrada) { trade.resultado = 'WIN'; mudou = true; } // Saiu no zero a zero (Win técnico para o placar)
+                    } else {
+                        if(precoAtual <= trade.tp2) { trade.resultado = 'WIN'; mudou = true; somWin.play().catch(e=>console.log(e)); }
+                        else if(precoAtual >= trade.entrada) { trade.resultado = 'WIN'; mudou = true; }
                     }
                 }
             });
             if(mudou) await salvarHistoricoNuvem(hist);
+        }
+
+        function dispararAlertaBreakeven(ativo) {
+            somBreakeven.play().catch(e => console.log("Áudio bloqueado."));
+            if (Notification.permission === "granted") {
+                new Notification('🛡️ ZERO RISCO ALCANÇADO', {
+                    body: `${ativo} bateu no TP1!\nMova o seu Stop Loss para o Preço de Entrada IMEDIATAMENTE.`,
+                    icon: 'https://cdn-icons-png.flaticon.com/512/2933/2933116.png'
+                });
+            }
         }
 
         async function registrarNovaEntrada(dados) {
@@ -414,7 +431,7 @@
             
             if(ultimoGatilhoID !== idAtual) {
                 let hist = await carregarHistoricoNuvem();
-                hist.push({ ativo: dados.ativo, estrategia: dados.estrategia_ativa, entrada: dados.entrada, tp1: dados.tp1, sl: dados.stop_loss, prob: dados.probabilidade, resultado: 'WAIT', id: idAtual });
+                hist.push({ ativo: dados.ativo, estrategia: dados.estrategia_ativa, entrada: dados.entrada, tp1: dados.tp1, tp2: dados.tp2, sl: dados.stop_loss, prob: dados.probabilidade, resultado: 'WAIT', id: idAtual });
                 await salvarHistoricoNuvem(hist);
                 ultimoGatilhoID = idAtual;
             }
@@ -422,9 +439,11 @@
 
         function trocarAtivo() {
             const ativo = document.getElementById('seletor-ativo').value;
-            const symbolTV = ativo === 'BTC' ? 'BINANCE:BTCUSD' : 'OANDA:XAUUSD';
-            const nomeStr = ativo === 'BTC' ? 'BTCUSD' : 'XAUUSD';
-            document.getElementById('label-chart').innerText = "📈 GRÁFICO OMNI: " + nomeStr;
+            let symbolTV = 'OANDA:XAUUSD';
+            if(ativo==='BTC') symbolTV = 'BINANCE:BTCUSD';
+            if(ativo==='EUR') symbolTV = 'OANDA:EURUSD';
+            
+            document.getElementById('label-chart').innerText = "📈 GRÁFICO OMNI: " + symbolTV.split(':')[1];
             document.getElementById('box-grafico').innerHTML = `<iframe scrolling="no" allowtransparency="true" frameborder="0" src="https://www.tradingview-widget.com/embed-widget/advanced-chart/?locale=br#%7B%22autosize%22%3Atrue%2C%22symbol%22%3A%22${symbolTV}%22%2C%22interval%22%3A%2215%22%2C%22timezone%22%3A%22America%2FSao_Paulo%22%2C%22theme%22%3A%22dark%22%2C%22style%22%3A%221%22%2C%22locale%22%3A%22br%22%2C%22hide_top_toolbar%22%3Afalse%2C%22allow_symbol_change%22%3A%22false%22%2C%22calendar%22%3Afalse%2C%22support_host%22%3A%22https%3A%22%7D" style="width:100%; height:100%;"></iframe>`;
             ultimoStatus = "SEM_SETUP";
         }
@@ -443,7 +462,7 @@
             somSinal.play().catch(e => console.log("Áudio bloqueado."));
             if (Notification.permission === "granted") {
                 const notificacao = new Notification('🟢 SETUP IDENTIFICADO', {
-                    body: `Ativo: ${ativo}\nWin Rate: ${prob}\nLote Sugerido: ${lote}\n\nClique para abrir!`,
+                    body: `Ativo: ${ativo}\nLote Sugerido: ${lote}\n\nClique para abrir!`,
                     icon: 'https://cdn-icons-png.flaticon.com/512/2933/2933116.png'
                 });
                 notificacao.onclick = function() { window.focus(); this.close(); };
@@ -456,7 +475,7 @@
                 roboAtivo = false;
                 localStorage.setItem('roboLigado', 'false'); 
                 btnRobo.classList.remove('ativo');
-                btnRobo.innerText = "🤖 Ligar Auto-Scanner";
+                btnRobo.innerText = "🤖 Ligar Radar 360º";
                 document.getElementById('aviso-tela').style.display = 'none';
                 clearInterval(roboInterval);
                 ultimoStatus = "SEM_SETUP";
@@ -466,24 +485,38 @@
             roboAtivo = true;
             localStorage.setItem('roboLigado', 'true'); 
             btnRobo.classList.add('ativo');
-            btnRobo.innerText = "⏹️ Desligar Auto-Scanner";
+            btnRobo.innerText = "⏹️ Desligar Radar 360º";
             document.getElementById('aviso-tela').style.display = 'block';
             
-            buscarAnalise(true, false);
-            roboInterval = setInterval(() => buscarAnalise(true, false), 180000);
+            executarRadar360(); // Executa logo a primeira vez
+            roboInterval = setInterval(() => executarRadar360(), 180000); // 3 em 3 min
         }
 
-        async function buscarAnalise(silencioso = false, forcarTeste = false) {
+        // 📡 NOVIDADE: RADAR 360º (Varre os 3 ativos de forma silenciosa)
+        async function executarRadar360() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('loading').innerText = "📡 A varrer o mercado global (XAU, BTC, EUR)...";
+            
+            for(let ativo of ativosParaVarrer) {
+                await buscarAnalise(ativo, true, false);
+            }
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function iniciarVarreduraUnica() {
+            const ativoEscolhido = document.getElementById('seletor-ativo').value;
+            buscarAnalise(ativoEscolhido, false, false);
+        }
+
+        async function buscarAnalise(ativoEscolhido, silencioso = false, forcarTeste = false) {
             if (Notification.permission !== "granted") Notification.requestPermission();
             
-            const ativoEscolhido = document.getElementById('seletor-ativo').value;
             let url = `https://shadow-v3-motor.onrender.com/analisar?ativo=${ativoEscolhido}`;
-            
             if (forcarTeste) { url += `&teste=true`; silencioso = false; }
 
             if (!silencioso) {
                 document.getElementById('loading').style.display = 'block';
-                document.getElementById('loading').innerText = forcarTeste ? "Testando Escudo, Calculadora e Sinais..." : `A analisar ${ativoEscolhido}...`;
+                document.getElementById('loading').innerText = forcarTeste ? "Testando Funcionalidades PWA..." : `A analisar ${ativoEscolhido}...`;
             }
 
             try {
@@ -491,20 +524,12 @@
                 const dados = await resposta.json();
                 
                 if (!silencioso) document.getElementById('loading').style.display = 'none';
-
-                if(dados.erro) {
-                    if (dados.status === "ESCUDO_ATIVO") {
-                        document.getElementById('aviso-escudo').style.display = 'block';
-                        document.getElementById('aviso-mercado').style.display = 'none';
-                    } else {
-                        document.getElementById('aviso-mercado').style.display = 'block';
-                        document.getElementById('aviso-mercado').innerText = "🔴 " + dados.erro;
-                        document.getElementById('aviso-escudo').style.display = 'none';
-                    }
+                if (dados.erro && !silencioso) {
+                    document.getElementById('aviso-mercado').style.display = 'block';
+                    document.getElementById('aviso-mercado').innerText = "🔴 " + dados.erro;
                     return; 
-                } else {
+                } else if(!silencioso) {
                     document.getElementById('aviso-mercado').style.display = 'none';
-                    document.getElementById('aviso-escudo').style.display = 'none';
                 }
 
                 const painel = document.getElementById('painel-resultado');
@@ -512,21 +537,21 @@
                 
                 if(!forcarTeste && dados.preco_atual) await avaliarOperacoesAbertas(dados.preco_atual, dados.ativo);
 
+                // Se achar um setup (mesmo no modo 360 silencioso), ele atualiza a interface
                 if(dados.status === "SETUP_CONFIRMADO") {
                     painel.style.borderLeftColor = "#00E676";
                     painel.classList.add('painel-destaque'); 
                     
                     badge.className = "status-badge setup-ok";
-                    badge.innerText = `🟢 ALERTA: SINAL CONFIRMADO`;
+                    badge.innerText = `🟢 SINAL CONFIRMADO NO ${dados.ativo}`;
                     
                     const loteCalc = calcularLote(dados.ativo, dados.entrada, dados.stop_loss);
 
                     document.getElementById('painel-tatico').style.display = 'block';
                     document.getElementById('tat-titulo').innerText = "⚡ RELATÓRIO TÁTICO INSTITUCIONAL";
                     document.getElementById('tat-ativo').innerText = dados.ativo;
-                    document.getElementById('tat-macro').innerText = dados.tendencia_macro;
+                    document.getElementById('tat-atr').innerText = dados.atr_atual;
                     document.getElementById('tat-estrategia').innerText = dados.estrategia_ativa;
-                    document.getElementById('tat-prob').innerText = dados.probabilidade;
                     document.getElementById('tat-lote').innerText = loteCalc;
                     document.getElementById('tat-explica').innerText = dados.explicacao_estrategia;
 
@@ -539,6 +564,12 @@
                     document.getElementById('val-tp2').innerText = dados.tp2;
                     document.getElementById('val-tp3').innerText = dados.tp3;
 
+                    // Muda o gráfico para o ativo que deu sinal se ele achar algo no Radar 360
+                    if (document.getElementById('seletor-ativo').value !== ativoEscolhido && !forcarTeste) {
+                        document.getElementById('seletor-ativo').value = ativoEscolhido;
+                        trocarAtivo();
+                    }
+
                     await registrarNovaEntrada(dados);
 
                     if (forcarTeste || (roboAtivo && ultimoStatus !== "SETUP_CONFIRMADO")) {
@@ -546,7 +577,7 @@
                     }
                     ultimoStatus = "SETUP_CONFIRMADO";
 
-                } else {
+                } else if (!silencioso) {
                     painel.style.borderLeftColor = "#FF1744";
                     painel.classList.remove('painel-destaque'); 
                     badge.className = "status-badge setup-wait";
@@ -560,7 +591,7 @@
             } catch (erro) {
                 if (!silencioso) {
                     document.getElementById('loading').style.display = 'block';
-                    document.getElementById('loading').innerText = "Erro ao contactar a API de liquidez. A aguardar reconexão...";
+                    document.getElementById('loading').innerText = "Erro ao contactar a API de liquidez.";
                 }
             }
         }

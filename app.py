@@ -45,7 +45,7 @@ def sync_historico():
 
 @app.route('/radar-mensal')
 def radar_mensal():
-    prompt = "Faça um resumo direto (2 linhas) do que esperar do Ouro baseado nas últimas notícias do Payroll e Juros do FED. Seja analítico."
+    prompt = "Faça um resumo direto (2 linhas) do que esperar do Ouro e Euro baseado nas últimas notícias do Payroll e Juros. Seja analítico."
     try:
         res = client.chat.completions.create(
             model="llama-3.1-8b-instant",
@@ -54,10 +54,9 @@ def radar_mensal():
         )
         return jsonify({"radar": res.choices[0].message.content.strip()})
     except:
-        return jsonify({"radar": "Análise Macro indisponível no momento. A IA está em arrefecimento."})
+        return jsonify({"radar": "Análise Macro indisponível no momento."})
 
 def obter_tendencia_macro(simbolo):
-    # Puxa 1H e 4H para filtro anti-loss
     try:
         url_1h = f"https://api.twelvedata.com/time_series?symbol={simbolo}&interval=1h&outputsize=25&apikey={TWELVEDATA_KEY}"
         url_4h = f"https://api.twelvedata.com/time_series?symbol={simbolo}&interval=4h&outputsize=25&apikey={TWELVEDATA_KEY}"
@@ -72,12 +71,9 @@ def obter_tendencia_macro(simbolo):
         ema9_4h = df4['close'].ewm(span=9, adjust=False).mean().iloc[-1]
         ema21_4h = df4['close'].ewm(span=21, adjust=False).mean().iloc[-1]
 
-        if ema9_1h > ema21_1h and ema9_4h > ema21_4h:
-            return "ALTA"
-        elif ema9_1h < ema21_1h and ema9_4h < ema21_4h:
-            return "BAIXA"
-        else:
-            return "LATERAL"
+        if ema9_1h > ema21_1h and ema9_4h > ema21_4h: return "ALTA"
+        elif ema9_1h < ema21_1h and ema9_4h < ema21_4h: return "BAIXA"
+        else: return "LATERAL"
     except:
         return "LATERAL"
 
@@ -85,11 +81,14 @@ def obter_tendencia_macro(simbolo):
 def analisar():
     ativo = request.args.get('ativo', 'XAU')
     modo_teste = request.args.get('teste', 'false')
-    simbolo = "BTC/USD" if ativo == "BTC" else "XAU/USD"
+    
+    simbolo = "XAU/USD"
+    if ativo == "BTC": simbolo = "BTC/USD"
+    elif ativo == "EUR": simbolo = "EUR/USD"
 
     if modo_teste == 'true':
         return jsonify({
-            "ativo": "BTCUSD" if ativo == "BTC" else "XAUUSD",
+            "ativo": simbolo.replace("/", ""),
             "status": "SETUP_CONFIRMADO",
             "estrategia_ativa": "TESTE DE SISTEMA INTEGRADO",
             "preco_atual": 1500.50,
@@ -102,9 +101,10 @@ def analisar():
             "tp2": 1520.00,
             "tp3": 1530.00,
             "probabilidade": "99.9%",
-            "explicacao_estrategia": "Teste de funcionalidades: Confluência Multi-Timeframe e Calculadora de Lotes a funcionar em pleno.",
-            "pontos_confianca": "150 pontos",
-            "tendencia_macro": "ALTA"
+            "explicacao_estrategia": "Teste de Scanner Multi-Ativos, ATR Dinâmico e Gestão Breakeven.",
+            "pontos_confianca": "ATR Médio",
+            "tendencia_macro": "ALTA",
+            "atr": 10.5
         })
 
     url_dados = f"https://api.twelvedata.com/time_series?symbol={simbolo}&interval=15min&outputsize=50&apikey={TWELVEDATA_KEY}"
@@ -114,90 +114,85 @@ def analisar():
     resp_dxy = requests.get(url_dxy).json()
 
     if "values" not in resp_dados:
-        return jsonify({"status": "SEM_SETUP", "ativo": ativo, "erro": f"O mercado de {ativo} está fechado ou sem liquidez."})
+        return jsonify({"status": "SEM_SETUP", "ativo": ativo, "erro": f"Mercado de {ativo} sem liquidez."})
 
     df = pd.DataFrame(resp_dados["values"])
     df = df.iloc[::-1].reset_index(drop=True) 
-    df['close'] = df['close'].astype(float)
-    df['low'] = df['low'].astype(float)
-    df['high'] = df['high'].astype(float)
+    for col in ['close', 'high', 'low']: df[col] = df[col].astype(float)
     
     df['ema_9'] = df['close'].ewm(span=9, adjust=False).mean()
     df['ema_21'] = df['close'].ewm(span=21, adjust=False).mean()
-    poc_estimado = round(df['close'].mean(), 2)
+    poc_estimado = round(df['close'].mean(), 5 if ativo == 'EUR' else 2)
+
+    # 🧮 CÁLCULO DE VOLATILIDADE ATR (14 períodos)
+    df['prev_close'] = df['close'].shift(1)
+    df['tr'] = df.apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - x['prev_close']), abs(x['low'] - x['prev_close'])), axis=1)
+    df['atr'] = df['tr'].rolling(window=14).mean()
 
     dxy_atual = round(float(pd.DataFrame(resp_dxy["values"]).iloc[0]['close']), 2) if "values" in resp_dxy else 100.0
 
     candle_atual = df.iloc[-1]
     candle_anterior = df.iloc[-2]
-    preco_atual = round(candle_atual['close'], 2)
-    ema_9_atual = round(candle_atual['ema_9'], 2)
-    ema_21_atual = round(candle_atual['ema_21'], 2)
+    
+    casas_dec = 5 if ativo == "EUR" else 2
+    preco_atual = round(candle_atual['close'], casas_dec)
+    ema_9_atual = candle_atual['ema_9']
+    ema_21_atual = candle_atual['ema_21']
+    atr_atual = candle_atual['atr']
 
     agora = datetime.utcnow()
     mercado_fechado = False
-    if ativo == "XAU":
+    if ativo in ["XAU", "EUR"]:
         if agora.weekday() == 5 or (agora.weekday() == 6 and agora.hour < 21):
             mercado_fechado = True
 
-    # 🛡️ ESCUDO DE NOTÍCIAS (Horários de alta volatilidade - GMT/UTC)
     escudo_ativo = False
     if (agora.hour == 12 and agora.minute >= 25) or (agora.hour == 13 and agora.minute <= 45):
-        escudo_ativo = True # Abertura NY / Dados Económicos
-    elif agora.hour == 18 and agora.minute <= 30:
-        escudo_ativo = True # FOMC Minutes (Eventual)
+        escudo_ativo = True 
 
     status_setup = False
     tp1 = tp2 = tp3 = sl = 0.0
     estrategia_detectada = ""
     probabilidade_base = 0
     explicacao_estrategia = ""
-    pontos_calc = 0
-    tendencia_macro = "A calcular..."
-
-    mult = 100 if ativo == "BTC" else 1
 
     if not mercado_fechado and not escudo_ativo:
         tendencia_macro = obter_tendencia_macro(simbolo)
         
-        # 🧠 CONFLUÊNCIA H1/H4: Só entra se a direção macro bater com a entrada 15M
+        # O ATR substitui os cálculos antigos. Ele adapta-se perfeitamente ao Ouro, BTC ou EUR/USD sozinho!
         if ema_9_atual > ema_21_atual and tendencia_macro == "ALTA":
-            distancia_ema21 = candle_atual['low'] - ema_21_atual
-            if - (1.00 * mult) <= distancia_ema21 <= (2.00 * mult):
+            if -atr_atual <= (candle_atual['low'] - ema_21_atual) <= atr_atual:
                 status_setup = True
                 estrategia_detectada = "PULLBACK FLEXÍVEL (COMPRA)"
-                probabilidade_base = 82 # Aumentou porque tem suporte macro!
-                sl = round(ema_21_atual - (1.50 * mult), 2)
-                tp1 = round(preco_atual + (1.50 * mult), 2)
-                tp2 = round(preco_atual + (3.00 * mult), 2)
-                tp3 = round(preco_atual + (5.00 * mult), 2)
-                explicacao_estrategia = "Gráficos H1 e H4 confirmam tendência de ALTA. Retração de valor no M15 identificada. Máxima segurança."
-                pontos_calc = int((tp1 - preco_atual) * 100) if ativo == "XAU" else int(tp1 - preco_atual)
+                probabilidade_base = 82
+                sl = round(preco_atual - (1.5 * atr_atual), casas_dec)
+                tp1 = round(preco_atual + (1.0 * atr_atual), casas_dec)
+                tp2 = round(preco_atual + (2.0 * atr_atual), casas_dec)
+                tp3 = round(preco_atual + (3.0 * atr_atual), casas_dec)
+                explicacao_estrategia = "Tendência macro de ALTA. Retração no M15 identificada. Alvos ajustados pela volatilidade (ATR)."
                 
             elif candle_anterior['close'] < candle_anterior['ema_9'] and preco_atual > ema_9_atual:
                 status_setup = True
                 estrategia_detectada = "MOMENTUM SCALPER (COMPRA)"
                 probabilidade_base = 75
-                sl = round(candle_atual['low'] - (0.60 * mult), 2)
-                tp1 = round(preco_atual + (1.20 * mult), 2)
-                tp2 = round(preco_atual + (2.50 * mult), 2)
-                tp3 = round(preco_atual + (4.00 * mult), 2)
-                explicacao_estrategia = "Injeção de volume no M15 apoiada pela macro tendência compradora. Movimento rápido."
-                pontos_calc = int((tp1 - preco_atual) * 100) if ativo == "XAU" else int(tp1 - preco_atual)
+                sl = round(preco_atual - (1.2 * atr_atual), casas_dec)
+                tp1 = round(preco_atual + (1.0 * atr_atual), casas_dec)
+                tp2 = round(preco_atual + (2.0 * atr_atual), casas_dec)
+                tp3 = round(preco_atual + (3.0 * atr_atual), casas_dec)
+                explicacao_estrategia = "Rompimento do M15 apoiado pela macro. Volatilidade atual suporta esta operação rápida."
 
         elif ema_9_atual <= ema_21_atual and tendencia_macro == "BAIXA":
             if candle_atual['high'] >= ema_9_atual and candle_atual['close'] < ema_9_atual:
                 status_setup = True
                 estrategia_detectada = "REJEIÇÃO DE TOPO (VENDA)"
                 probabilidade_base = 78
-                sl = round(candle_atual['high'] + (1.00 * mult), 2)
-                tp1 = round(preco_atual - (1.50 * mult), 2)
-                tp2 = round(preco_atual - (3.00 * mult), 2)
-                tp3 = round(preco_atual - (5.00 * mult), 2)
-                explicacao_estrategia = "Vendedores a dominar H1 e H4. Rejeição clara no M15. Forte probabilidade de derrocada."
-                pontos_calc = int((preco_atual - tp1) * 100) if ativo == "XAU" else int(preco_atual - tp1)
+                sl = round(preco_atual + (1.5 * atr_atual), casas_dec)
+                tp1 = round(preco_atual - (1.0 * atr_atual), casas_dec)
+                tp2 = round(preco_atual - (2.0 * atr_atual), casas_dec)
+                tp3 = round(preco_atual - (3.0 * atr_atual), casas_dec)
+                explicacao_estrategia = "Vendedores dominam a macro. Rejeição clara no M15. SL posicionado acima do ruído via ATR."
 
-    nome_ativo = "BTCUSD" if ativo == "BTC" else "XAUUSD"
+    nome_ativo = simbolo.replace("/", "")
     probabilidade_final = round(probabilidade_base + (dxy_atual % 1), 1) if status_setup else 0
 
     resultado_motor = {
@@ -206,14 +201,12 @@ def analisar():
         "preco_atual": preco_atual,
         "dxy_atual": dxy_atual,
         "poc_volume": poc_estimado,
+        "atr_atual": round(atr_atual, casas_dec),
         "data_hora": resp_dados["values"][0]["datetime"]
     }
 
-    if mercado_fechado:
-        resultado_motor["erro"] = "O mercado de Ouro está encerrado. Reabre no domingo à noite."
-    elif escudo_ativo:
-        resultado_motor["erro"] = "ESCUDO DE NOTÍCIAS ATIVO! Bloqueio de segurança devido a alta volatilidade no calendário."
-        resultado_motor["status"] = "ESCUDO_ATIVO"
+    if mercado_fechado: resultado_motor["erro"] = f"Mercado fechado para {ativo}."
+    elif escudo_ativo: resultado_motor["erro"] = "ESCUDO ATIVO! Alta volatilidade."
 
     if status_setup:
         resultado_motor["status"] = "SETUP_CONFIRMADO"
@@ -224,7 +217,7 @@ def analisar():
         resultado_motor["tp3"] = tp3
         resultado_motor["probabilidade"] = f"{probabilidade_final}%"
         resultado_motor["explicacao_estrategia"] = explicacao_estrategia
-        resultado_motor["pontos_confianca"] = f"Alvo Seguro: {pontos_calc} pontos"
+        resultado_motor["pontos_confianca"] = "Baseado em ATR (Volatilidade)"
         resultado_motor["tendencia_macro"] = tendencia_macro
     elif not escudo_ativo and not mercado_fechado:
         resultado_motor["status"] = "SEM_SETUP"
