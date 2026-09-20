@@ -16,13 +16,37 @@ client = OpenAI(
 )
 TWELVEDATA_KEY = os.environ.get("TWELVEDATA_KEY")
 
+DB_FILE = 'historico_db.json'
+
 @app.route('/ping')
 def ping():
     return jsonify({"status": "motor_aquecido"})
 
+# --- SISTEMA DE MEMÓRIA EM NUVEM (PC E CELULAR) ---
+@app.route('/get-historico', methods=['GET'])
+def get_historico():
+    try:
+        if os.path.exists(DB_FILE):
+            with open(DB_FILE, 'r') as f:
+                return jsonify(json.load(f))
+        return jsonify([])
+    except:
+        return jsonify([])
+
+@app.route('/sync-historico', methods=['POST'])
+def sync_historico():
+    try:
+        dados = request.json
+        with open(DB_FILE, 'w') as f:
+            json.dump(dados, f)
+        return jsonify({"status": "sucesso"})
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+# --------------------------------------------------
+
 @app.route('/radar-mensal')
 def radar_mensal():
-    prompt = "Resumo direto (2 linhas) do cenário do Ouro e Bitcoin baseado nos juros do FED."
+    prompt = "Faça um resumo direto (2 linhas) do que se esperar do Ouro baseado nas últimas notícias do Payroll e Juros do FED. Seja analítico."
     try:
         res = client.chat.completions.create(
             model="llama-3.1-8b-instant",
@@ -31,7 +55,7 @@ def radar_mensal():
         )
         return jsonify({"radar": res.choices[0].message.content.strip()})
     except:
-        return jsonify({"radar": "Radar Macro temporariamente indisponível."})
+        return jsonify({"radar": "Análise Macro indisponível no momento. A IA está em resfriamento."})
 
 @app.route('/analisar')
 def analisar():
@@ -39,11 +63,9 @@ def analisar():
     modo_teste = request.args.get('teste', 'false')
     simbolo = "BTC/USD" if ativo == "BTC" else "XAU/USD"
 
-    # MODO TESTE FORÇADO (Para você ver o painel tático)
     if modo_teste == 'true':
-        nome_ativo = "BTCUSD" if ativo == "BTC" else "XAUUSD"
         return jsonify({
-            "ativo": nome_ativo,
+            "ativo": "TESTE",
             "status": "SETUP_CONFIRMADO",
             "estrategia_ativa": "TESTE DE SISTEMA",
             "preco_atual": 1500.50,
@@ -56,8 +78,8 @@ def analisar():
             "tp2": 1520.00,
             "tp3": 1530.00,
             "probabilidade": "99.9%",
-            "explicacao_estrategia": "Este é um disparo de teste. Serve para validar se o painel tático e as notificações estão sendo exibidos corretamente no seu aparelho.",
-            "pontos_confianca": "150 pontos (Equivalente ao TP1)"
+            "explicacao_estrategia": "Disparo de teste forçado para validar a persistência de dados e painéis.",
+            "pontos_confianca": "150 pontos"
         })
 
     url_dados = f"https://api.twelvedata.com/time_series?symbol={simbolo}&interval=15min&outputsize=50&apikey={TWELVEDATA_KEY}"
@@ -66,8 +88,13 @@ def analisar():
     url_dxy = f"https://api.twelvedata.com/time_series?symbol=DXY&interval=1h&outputsize=5&apikey={TWELVEDATA_KEY}"
     resp_dxy = requests.get(url_dxy).json()
 
+    # Verifica se o ativo está disponível / mercado aberto
     if "values" not in resp_dados:
-        return jsonify({"erro": f"Mercado fechado ou sem liquidez no momento para {ativo}."}), 500
+        return jsonify({
+            "status": "SEM_SETUP",
+            "ativo": ativo,
+            "erro": f"O mercado de {ativo} está fechado ou sem liquidez agora."
+        })
 
     df = pd.DataFrame(resp_dados["values"])
     df = df.iloc[::-1].reset_index(drop=True) 
@@ -106,7 +133,7 @@ def analisar():
             tp1 = round(preco_atual + (1.50 * mult), 2)
             tp2 = round(preco_atual + (3.00 * mult), 2)
             tp3 = round(preco_atual + (5.00 * mult), 2)
-            explicacao_estrategia = "O preço corrigiu até a zona de valor (Média de 21) durante uma tendência de alta. As instituições costumam defender e comprar forte nessa região exata."
+            explicacao_estrategia = "Retração até a zona da Média de 21 em tendência de alta. Região de defesa institucional."
             pontos_calc = int((tp1 - preco_atual) * 100) if ativo == "XAU" else int(tp1 - preco_atual)
             
         elif candle_anterior['close'] < candle_anterior['ema_9'] and preco_atual > ema_9_atual:
@@ -117,7 +144,7 @@ def analisar():
             tp1 = round(preco_atual + (1.20 * mult), 2)
             tp2 = round(preco_atual + (2.50 * mult), 2)
             tp3 = round(preco_atual + (4.00 * mult), 2)
-            explicacao_estrategia = "Rompimento agressivo superando a média de curto prazo (9). Isso indica entrada repentina de volume de grandes players. Operação rápida."
+            explicacao_estrategia = "Rompimento agressivo indicando entrada repentina de volume de grandes players."
             pontos_calc = int((tp1 - preco_atual) * 100) if ativo == "XAU" else int(tp1 - preco_atual)
 
     else:
@@ -129,7 +156,7 @@ def analisar():
             tp1 = round(preco_atual - (1.50 * mult), 2)
             tp2 = round(preco_atual - (3.00 * mult), 2)
             tp3 = round(preco_atual - (5.00 * mult), 2)
-            explicacao_estrategia = "O preço tentou subir, mas foi violentamente rejeitado na zona da Média Móvel, confirmando a força dos vendedores. Cenário ideal para entrar vendido."
+            explicacao_estrategia = "Violenta rejeição na Média Móvel confirmando força vendedora. Ideal para Short."
             pontos_calc = int((preco_atual - tp1) * 100) if ativo == "XAU" else int(preco_atual - tp1)
 
     nome_ativo = "BTCUSD" if ativo == "BTC" else "XAUUSD"
@@ -153,7 +180,7 @@ def analisar():
         resultado_motor["tp3"] = tp3
         resultado_motor["probabilidade"] = f"{probabilidade_final}%"
         resultado_motor["explicacao_estrategia"] = explicacao_estrategia
-        resultado_motor["pontos_confianca"] = f"Alvo Seguro: {pontos_calc} pontos (Busque o TP1)"
+        resultado_motor["pontos_confianca"] = f"Alvo Seguro: {pontos_calc} pontos (TP1)"
     else:
         resultado_motor["status"] = "SEM_SETUP"
 
