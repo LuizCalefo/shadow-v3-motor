@@ -2,7 +2,7 @@ from flask import Flask, jsonify, request, render_template_string
 from flask_cors import CORS
 import requests
 import pandas as pd
-import json
+import sqlite3
 import os
 import threading
 import time
@@ -22,7 +22,7 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 FUSO_LISBOA = pytz.timezone('Europe/Lisbon')
 
-DB_FILE = 'historico_db.json'
+DB_FILE = 'trading_shadow.db'
 ULTIMA_NOTICIA_PROCESSADA = ""
 ULTIMO_RELATORIO_DIARIO = ""
 ULTIMO_RELATORIO_SEMANAL = ""
@@ -30,21 +30,122 @@ CACHE_MACRO = {}
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN) if TELEGRAM_TOKEN else None
 
+# ==========================================
+# INICIALIZAÇÃO DA BASE DE DADOS (SQLITE)
+# ==========================================
+def inicializar_bd():
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS historico (
+                id TEXT PRIMARY KEY,
+                ativo TEXT,
+                estrategia TEXT,
+                entrada REAL,
+                tp1 REAL,
+                tp2 REAL,
+                tp3 REAL,
+                sl REAL,
+                resultado TEXT,
+                estado_fechado INTEGER,
+                data_fecho TEXT,
+                pontos REAL
+            )
+        ''')
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print("Erro ao criar BD SQLite:", e)
+
+inicializar_bd()
+
 def ler_historico():
     try:
-        if os.path.exists(DB_FILE):
-            with open(DB_FILE, 'r') as f:
-                return json.load(f)
-        return []
-    except:
+        conn = sqlite3.connect(DB_FILE)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM historico")
+        rows = cursor.fetchall()
+        conn.close()
+        
+        hist = []
+        for row in rows:
+            hist.append({
+                "id": row["id"],
+                "ativo": row["ativo"],
+                "estrategia": row["estrategia"],
+                "entrada": row["entrada"],
+                "tp1": row["tp1"],
+                "tp2": row["tp2"],
+                "tp3": row["tp3"],
+                "sl": row["sl"],
+                "resultado": row["resultado"],
+                "estado_fechado": bool(row["estado_fechado"]),
+                "data_fecho": row["data_fecho"],
+                "pontos": row["pontos"]
+            })
+        return hist
+    except Exception as e:
+        print("Erro ao ler BD:", e)
         return []
 
-def salvar_historico(dados):
+def salvar_historico(dados_lista):
     try:
-        with open(DB_FILE, 'w') as f:
-            json.dump(dados, f)
-    except:
-        pass
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        # Substitui tudo de forma segura e atómica
+        cursor.execute("DELETE FROM historico")
+        for t in dados_lista:
+            cursor.execute('''
+                INSERT OR REPLACE INTO historico (id, ativo, estrategia, entrada, tp1, tp2, tp3, sl, resultado, estado_fechado, data_fecho, pontos)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                t.get("id"),
+                t.get("ativo"),
+                t.get("estrategia"),
+                t.get("entrada"),
+                t.get("tp1"),
+                t.get("tp2"),
+                t.get("tp3"),
+                t.get("sl"),
+                t.get("resultado", "WAIT"),
+                1 if t.get("estado_fechado") else 0,
+                t.get("data_fecho"),
+                t.get("pontos", 0.0)
+            ))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print("Erro ao salvar na BD:", e)
+
+# ==========================================
+# SISTEMA DE RETRY AUTOMÁTICO NAS APIS
+# ==========================================
+def requisicao_com_retry(url, max_tentativas=3, espera=2):
+    for tentativa in range(max_tentativas):
+        try:
+            resposta = requests.get(url, timeout=10)
+            if resposta.status_code == 200:
+                return resposta.json()
+        except Exception as e:
+            print(bah := f"Tentativa {tentativa+1} falhou para {url}: {e}")
+        time.sleep(espera)
+    return None
+
+def chamar_ia_com_retry(prompt, max_tentativas=3):
+    for tentativa in range(max_tentativas):
+        try:
+            res = client.chat.completions.create(
+                model="llama-3.1-8b-instant", 
+                messages=[{"role": "user", "content": prompt}], 
+                temperature=0.3
+            )
+            return res.choices[0].message.content.strip()
+        except Exception as e:
+            print(f"Tentativa IA {tentativa+1} falhou: {e}")
+            time.sleep(2)
+    return "⚠️ Serviço de IA temporariamente indisponível."
 
 def enviar_telegram(mensagem):
     if not bot or not TELEGRAM_CHAT_ID: return
@@ -68,7 +169,7 @@ if bot:
                f"🕒 *Hora local:* {agora.strftime('%H:%M')} (Lisboa)\n"
                f"📊 *Sessão Atual:* {zona}\n"
                f"📈 *Macro Tendência Ouro:* {tendencia_xau}\n"
-               f"📡 *Varredura:* Ativa (Ciclos de 5 min)")
+               f"📡 *Varredura:* Ativa (Base SQLite Segura)")
         bot.reply_to(message, msg, parse_mode="Markdown")
 
     @bot.message_handler(commands=['abertas'])
@@ -77,7 +178,7 @@ if bot:
         abertas = [t for t in hist if not t.get("estado_fechado")]
         
         if not abertas:
-            bot.reply_to(message, "💤 *Nenhuma operação aberta neste momento.* O mercado está a ser monitorizado.", parse_mode="Markdown")
+            bot.reply_to(message, "💤 *Nenhuma operação aberta neste momento.*", parse_mode="Markdown")
             return
             
         msg = "📂 *OPERAÇÕES EM ANDAMENTO:*\n\n"
@@ -94,10 +195,10 @@ if bot:
         data_hoje_str = agora.strftime("%Y-%m-%d")
         
         hist = ler_historico()
-        hist_hoje = [t for t in hist if t.get("estado_fechado") and t.get("data_fecho") == data_hoje_str]
+        hist_hoje = [t for t in hist if t.get("estado_fechado") and t.get("data_fecho"] == data_hoje_str]
         
         if not hist_hoje:
-            bot.reply_to(message, "📉 *Nenhuma operação foi fechada hoje até agora.*", parse_mode="Markdown")
+            bot.reply_to(message, "📉 *Nenhuma operação fechada hoje.*", parse_mode="Markdown")
             return
             
         w, l, z, pts, alvs, wr = compilar_estatisticas(hist_hoje)
@@ -109,7 +210,7 @@ if bot:
 
     @bot.message_handler(commands=['varrer'])
     def cmd_varrer(message):
-        bot.reply_to(message, "🔍 *Forçando varredura imediata dos servidores de liquidez...* aguarde.", parse_mode="Markdown")
+        bot.reply_to(message, "🔍 *Forçando varredura imediata...* aguarde.", parse_mode="Markdown")
         resumos = []
         for ativo in ["XAU", "BTC", "EUR"]:
             dados = analisar_ativo_interno(ativo)
@@ -124,26 +225,33 @@ if bot:
         bot.send_message(message.chat.id, "\n".join(resumos), parse_mode="Markdown")
 
 # ==========================================
-# MOTOR QUANTITATIVO
+# MOTOR MACROECONÓMICO COM RETRY NA IA
 # ==========================================
-
-def analisar_noticia_ia(titulo_evento):
-    prompt = f"Uma notícia económica saiu: '{titulo_evento}'. Escreva alerta curto (máx 4 linhas) para traders: Significado, Impacto Ouro/Dólar, Cenário tático. Use emojis."
-    try:
-        res = client.chat.completions.create(model="llama-3.1-8b-instant", messages=[{"role": "user", "content": prompt}], temperature=0.3)
-        return res.choices[0].message.content.strip()
-    except: return "⚠️ Notícia macroeconómica detetada. Volatilidade extrema iminente."
+def analisar_noticia_ia(titulo_evento, tipo="alerta"):
+    if tipo == "alerta":
+        prompt = f"Notícia macroeconómica ({titulo_evento}) vai sair agora. Escreva alerta curto (máx 3 linhas) para traders de Ouro e Dólar: Risco de volatilidade e spread. Use emojis."
+    else:
+        prompt = f"Notícia macroeconómica ({titulo_evento}) publicada nos EUA. Como gestor quantitativo, explique em 5 linhas o impacto no DXY e XAU/USD, cenário forte vs fraco e postura no gráfico. Use emojis."
+    
+    return chamar_ia_com_retry(prompt)
 
 def verificar_noticias_ao_vivo():
     global ULTIMA_NOTICIA_PROCESSADA
     try:
         agora = datetime.now(FUSO_LISBOA)
         hora_atual = agora.strftime("%H")
-        if 30 <= agora.minute <= 35 and hora_atual != ULTIMA_NOTICIA_PROCESSADA:
-            analise_live = analisar_noticia_ia(f"Boletim Macro USD - Horário {hora_atual}:30 (Lisboa)")
-            enviar_telegram(f"🚨 *FEED DE NOTÍCIAS AO VIVO (MACRO USA)* 🚨\n\n{analise_live}")
+        minuto_atual = agora.minute
+
+        if 25 <= minuto_atual <= 28 and hora_atual != ULTIMA_NOTICIA_PROCESSADA:
+            analise_live = analisar_noticia_ia(f"Boletim Macro USD - {hora_atual}:30", tipo="alerta")
+            enviar_telegram(f"🚨 *ALERTA DE VOLATILIDADE (PRÉ-NOTÍCIA)* 🚨\n\n{analise_live}")
+            
+        elif 35 <= minuto_atual <= 38 and hora_atual != ULTIMA_NOTICIA_PROCESSADA:
+            analise_pos = analisar_noticia_ia(f"Rescaldo Macro USD - {hora_atual}:30", tipo="pos")
+            enviar_telegram(f"📊 *ANÁLISE PÓS-NOTÍCIA (IMPACTO NO GRÁFICO)* 📊\n\n{analise_pos}")
             ULTIMA_NOTICIA_PROCESSADA = hora_atual
-    except: pass
+    except Exception as e:
+        print("Erro nas notícias:", e)
 
 def compilar_estatisticas(hist_filtrado):
     wins = losses = zeros = pontos_totais = 0
@@ -174,27 +282,16 @@ def verificar_relatorios():
             hist_hoje = [t for t in hist_fechado if t.get("data_fecho") == data_hoje_str]
             if hist_hoje:
                 w, l, z, pts, alvs, wr = compilar_estatisticas(hist_hoje)
-                msg_diaria = (f"📅 *FECHO DO DIA (DIÁRIO)*\n\n⚖️ *Placar:* {w} Wins | {l} Loss | {z} Zero\n💰 *Pontos:* {pts} pts\n🎯 *Alvos:* {alvs['TP1']}x TP1 | {alvs['TP3']}x TP3\n\nAté amanhã! 🌙")
-                enviar_telegram(msg_diaria)
+                enviar_telegram(f"📅 *FECHO DO DIÁRIO*\n⚖️ Wins: {w} | Loss: {l}\n💰 Pontos: {pts} pts")
             ULTIMO_RELATORIO_DIARIO = data_hoje_str
 
         if agora.weekday() == 4 and agora.hour == 22 and 0 <= agora.minute <= 10 and data_hoje_str != ULTIMO_RELATORIO_SEMANAL:
             semana_atual = agora.isocalendar()[1]
-            hist_semana = []
-            for t in hist_fechado:
-                d_fecho = t.get("data_fecho")
-                if d_fecho:
-                    try:
-                        if datetime.strptime(d_fecho, "%Y-%m-%d").isocalendar()[1] == semana_atual:
-                            hist_semana.append(t)
-                    except: pass
+            hist_semana = [t for t in hist_fechado if t.get("data_fecho") and datetime.strptime(t.get("data_fecho"), "%Y-%m-%d").isocalendar()[1] == semana_atual]
             if hist_semana:
                 w, l, z, pts, alvs, wr = compilar_estatisticas(hist_semana)
-                prompt = f"Resumo quantitativo semanal: {w} Wins, {l} Losses, {z} Breakevens, Lucro total: {pts} pontos, Assertividade: {wr}%. Analise de forma profissional e encorajadora (3 linhas)."
-                try: comentario_ia = client.chat.completions.create(model="llama-3.1-8b-instant", messages=[{"role": "user", "content": prompt}], temperature=0.3).choices[0].message.content.strip()
-                except: comentario_ia = "Semana finalizada com dados consolidados. Gestão de risco aplicada."
-                msg_semanal = (f"📊 *BALANÇO SEMANAL - TRADING SHADOW*\n\n🟢 *Wins:* {w} | 🔴 *Losses:* {l} | 🛡️ *Zeros:* {z}\n🔥 *PONTOS TOTAIS:* {pts} pts\n🎯 *Assertividade:* {wr}%\n🏆 *Alvos Atingidos:* TP1 ({alvs['TP1']}) | TP3 ({alvs['TP3']})\n\n🧠 *Nota do Fundo:*\n\"{comentario_ia}\"\n\nBom fim de semana! 🚀")
-                enviar_telegram(msg_semanal)
+                comentario_ia = chamar_ia_com_retry(f"Resumo semanal: {w} Wins, {l} Losses, {pts} pts, {wr}% assertividade. Análise profissional de 3 linhas.")
+                enviar_telegram(f"📊 *BALANÇO SEMANAL*\nWins: {w} | Losses: {l} | Total: {pts} pts\n\n\"{comentario_ia}\"")
             ULTIMO_RELATORIO_SEMANAL = data_hoje_str
     except: pass
 
@@ -203,19 +300,24 @@ def obter_tendencia_macro(simbolo):
     if simbolo in CACHE_MACRO and (agora_timestamp - CACHE_MACRO[simbolo]['timestamp']) < 3600:
         return CACHE_MACRO[simbolo]['tendencia']
     try:
-        req_1h = requests.get(f"https://api.twelvedata.com/time_series?symbol={simbolo}&interval=1h&outputsize=25&apikey={TWELVEDATA_KEY}").json()
-        req_4h = requests.get(f"https://api.twelvedata.com/time_series?symbol={simbolo}&interval=4h&outputsize=25&apikey={TWELVEDATA_KEY}").json()
-        if "values" not in req_1h or "values" not in req_4h: return CACHE_MACRO[simbolo]['tendencia'] if simbolo in CACHE_MACRO else "LATERAL"
+        req_1h = requisicao_com_retry(f"https://api.twelvedata.com/time_series?symbol={simbolo}&interval=1h&outputsize=25&apikey={TWELVEDATA_KEY}")
+        req_4h = requisicao_com_retry(f"https://api.twelvedata.com/time_series?symbol={simbolo}&interval=4h&outputsize=25&apikey={TWELVEDATA_KEY}")
+        if not req_1h or not req_4h or "values" not in req_1h or "values" not in req_4h: 
+            return CACHE_MACRO.get(simbolo, {}).get('tendencia', 'LATERAL')
+            
         df1 = pd.DataFrame(req_1h['values'])[::-1].reset_index(drop=True)
         df1['close'] = df1['close'].astype(float)
         ema9_1h, ema21_1h = df1['close'].ewm(span=9, adjust=False).mean().iloc[-1], df1['close'].ewm(span=21, adjust=False).mean().iloc[-1]
+        
         df4 = pd.DataFrame(req_4h['values'])[::-1].reset_index(drop=True)
         df4['close'] = df4['close'].astype(float)
         ema9_4h, ema21_4h = df4['close'].ewm(span=9, adjust=False).mean().iloc[-1], df4['close'].ewm(span=21, adjust=False).mean().iloc[-1]
+        
         tendencia = "ALTA" if ema9_1h > ema21_1h and ema9_4h > ema21_4h else "BAIXA" if ema9_1h < ema21_1h and ema9_4h < ema21_4h else "LATERAL"
         CACHE_MACRO[simbolo] = {'tendencia': tendencia, 'timestamp': agora_timestamp}
         return tendencia
-    except: return CACHE_MACRO[simbolo]['tendencia'] if simbolo in CACHE_MACRO else "LATERAL"
+    except: 
+        return CACHE_MACRO.get(simbolo, {}).get('tendencia', 'LATERAL')
 
 def calcular_lote(ativo, entrada, stop_loss):
     distancia = abs(entrada - stop_loss)
@@ -239,10 +341,8 @@ def analisar_ativo_interno(ativo):
     is_killzone = 8 <= agora.hour <= 17
     zona_operacional = "🟢 Killzone Institucional (Londres/NY)" if is_killzone else "🔴 Baixo Volume / Ásia"
 
-    try: resp_dados = requests.get(f"https://api.twelvedata.com/time_series?symbol={simbolo}&interval=15min&outputsize=50&apikey={TWELVEDATA_KEY}").json()
-    except: return {"status": "ERRO_API"}
-    if "code" in resp_dados and "values" not in resp_dados: return {"status": "ERRO_API"}
-    if "values" not in resp_dados: return {"status": "SEM_SETUP", "ativo": ativo}
+    resp_dados = requisicao_com_retry(f"https://api.twelvedata.com/time_series?symbol={simbolo}&interval=15min&outputsize=50&apikey={TWELVEDATA_KEY}")
+    if not resp_dados or "values" not in resp_dados: return {"status": "ERRO_API"}
 
     df = pd.DataFrame(resp_dados["values"])
     df = df.iloc[::-1].reset_index(drop=True) 
@@ -297,31 +397,24 @@ def avaliar_operacoes_abertas_autonomo(preco_atual, ativo_formatado):
 
         if trade["resultado"] == "WAIT" and trade["ativo"] == ativo_formatado:
             if is_compra:
-                if preco_atual >= trade["tp3"]: fechar_trade_contabilidade(trade, "WIN", "TP3", trade["tp3"]); mudou = True; enviar_telegram(f"🎯 *TAKE PROFIT 3 ALCANÇADO (+{trade['pontos']} pts)*\n*{ativo_formatado}* esmagou o TP3! 🚀")
-                elif preco_atual >= trade["tp1"]: trade["resultado"] = "BREAKEVEN"; mudou = True; enviar_telegram(f"🏆 *VITÓRIA GARANTIDA (TP1)*\n*{ativo_formatado}* cravou o TP1! Risco anulado. 🛡️")
-                elif preco_atual <= trade["sl"]: fechar_trade_contabilidade(trade, "LOSS", "SL", trade["sl"]); mudou = True; enviar_telegram(f"❌ *STOP LOSS ATINGIDO ({trade['pontos']} pts)*\n{ativo_formatado} fechou.")
+                if preco_atual >= trade["tp3"]: fechar_trade_contabilidade(trade, "WIN", "TP3", trade["tp3"]); mudou = True; enviar_telegram(f"🎯 *TP3 ALCANÇADO (+{trade['pontos']} pts)*\n*{ativo_formatado}*")
+                elif preco_atual >= trade["tp1"]: trade["resultado"] = "BREAKEVEN"; mudou = True; enviar_telegram(f"🏆 *BREAKEVEN (TP1)*\n*{ativo_formatado}* Risco anulado.")
+                elif preco_atual <= trade["sl"]: fechar_trade_contabilidade(trade, "LOSS", "SL", trade["sl"]); mudou = True; enviar_telegram(f"❌ *LOSS* em {ativo_formatado}")
             else: 
-                if preco_atual <= trade["tp3"]: fechar_trade_contabilidade(trade, "WIN", "TP3", trade["tp3"]); mudou = True; enviar_telegram(f"🎯 *TAKE PROFIT 3 ALCANÇADO (+{trade['pontos']} pts)*\n*{ativo_formatado}* esmagou o TP3! 🚀")
-                elif preco_atual <= trade["tp1"]: trade["resultado"] = "BREAKEVEN"; mudou = True; enviar_telegram(f"🏆 *VITÓRIA GARANTIDA (TP1)*\n*{ativo_formatado}* cravou o TP1! Risco anulado. 🛡️")
-                elif preco_atual >= trade["sl"]: fechar_trade_contabilidade(trade, "LOSS", "SL", trade["sl"]); mudou = True; enviar_telegram(f"❌ *STOP LOSS ATINGIDO ({trade['pontos']} pts)*\n{ativo_formatado} fechou.")
+                if preco_atual <= trade["tp3"]: fechar_trade_contabilidade(trade, "WIN", "TP3", trade["tp3"]); mudou = True; enviar_telegram(f"🎯 *TP3 ALCANÇADO (+{trade['pontos']} pts)*\n*{ativo_formatado}*")
+                elif preco_atual <= trade["tp1"]: trade["resultado"] = "BREAKEVEN"; mudou = True; enviar_telegram(f"🏆 *BREAKEVEN (TP1)*\n*{ativo_formatado}* Risco anulado.")
+                elif preco_atual >= trade["sl"]: fechar_trade_contabilidade(trade, "LOSS", "SL", trade["sl"]); mudou = True; enviar_telegram(f"❌ *LOSS* em {ativo_formatado}")
         
         elif trade["resultado"] == "BREAKEVEN" and trade["ativo"] == ativo_formatado:
             if is_compra:
-                if preco_atual >= trade["tp3"]: fechar_trade_contabilidade(trade, "WIN", "TP3", trade["tp3"]); mudou = True; enviar_telegram(f"🚀 *ALVO FINAL (TP3) ATINGIDO! (+{trade['pontos']} pts)* \n{ativo_formatado} fechou!")
-                elif preco_atual >= trade["tp2"]: trade["resultado"] = "TRAILING_TP1"; mudou = True; enviar_telegram(f"🔥 *TRAILING STOP (TP2)*\n{ativo_formatado} rompeu TP2! Stop no TP1. 💰")
-                elif preco_atual <= trade["entrada"]: fechar_trade_contabilidade(trade, "ZERO", "ZERO", trade["entrada"]); mudou = True; enviar_telegram(f"⚖️ *SAÍDA NO ZERO-A-ZERO*\n{ativo_formatado} recuou e fechou na entrada.")
+                if preco_atual >= trade["tp3"]: fechar_trade_contabilidade(trade, "WIN", "TP3", trade["tp3"]); mudou = True
+                elif preco_atual >= trade["tp2"]: trade["resultado"] = "TRAILING_TP1"; mudou = True
+                elif preco_atual <= trade["entrada"]: fechar_trade_contabilidade(trade, "ZERO", "ZERO", trade["entrada"]); mudou = True
             else:
-                if preco_atual <= trade["tp3"]: fechar_trade_contabilidade(trade, "WIN", "TP3", trade["tp3"]); mudou = True; enviar_telegram(f"🚀 *ALVO FINAL (TP3) ATINGIDO! (+{trade['pontos']} pts)* \n{ativo_formatado} fechou!")
-                elif preco_atual <= trade["tp2"]: trade["resultado"] = "TRAILING_TP1"; mudou = True; enviar_telegram(f"🔥 *TRAILING STOP (TP2)*\n{ativo_formatado} rompeu TP2! Stop no TP1. 💰")
-                elif preco_atual >= trade["entrada"]: fechar_trade_contabilidade(trade, "ZERO", "ZERO", trade["entrada"]); mudou = True; enviar_telegram(f"⚖️ *SAÍDA NO ZERO-A-ZERO*\n{ativo_formatado} recuou e fechou na entrada.")
+                if preco_atual <= trade["tp3"]: fechar_trade_contabilidade(trade, "WIN", "TP3", trade["tp3"]); mudou = True
+                elif preco_atual <= trade["tp2"]: trade["resultado"] = "TRAILING_TP1"; mudou = True
+                elif preco_atual >= trade["entrada"]: fechar_trade_contabilidade(trade, "ZERO", "ZERO", trade["entrada"]); mudou = True
 
-        elif trade["resultado"] == "TRAILING_TP1" and trade["ativo"] == ativo_formatado:
-            if is_compra:
-                if preco_atual >= trade["tp3"]: fechar_trade_contabilidade(trade, "WIN", "TP3", trade["tp3"]); mudou = True; enviar_telegram(f"🚀 *ALVO FINAL (TP3) ATINGIDO! (+{trade['pontos']} pts)* \n{ativo_formatado} fechou!")
-                elif preco_atual <= trade["tp1"]: fechar_trade_contabilidade(trade, "WIN", "TP1", trade["tp1"]); mudou = True; enviar_telegram(f"💵 *SAÍDA NO TRAILING STOP (+{trade['pontos']} pts)*\n{ativo_formatado} fechou no TP1. 🛡️")
-            else:
-                if preco_atual <= trade["tp3"]: fechar_trade_contabilidade(trade, "WIN", "TP3", trade["tp3"]); mudou = True; enviar_telegram(f"🚀 *ALVO FINAL (TP3) ATINGIDO! (+{trade['pontos']} pts)* \n{ativo_formatado} fechou!")
-                elif preco_atual >= trade["tp1"]: fechar_trade_contabilidade(trade, "WIN", "TP1", trade["tp1"]); mudou = True; enviar_telegram(f"💵 *SAÍDA NO TRAILING STOP (+{trade['pontos']} pts)*\n{ativo_formatado} fechou no TP1. 🛡️")
     if mudou: salvar_historico(hist)
 
 def motor_quantitativo_loop():
@@ -337,11 +430,11 @@ def motor_quantitativo_loop():
                     id_atual = dados["ativo"] + dados["estrategia_ativa"] + dados["data_hora"]
                     hist = ler_historico()
                     if not any(t["id"] == id_atual for t in hist):
-                        msg = (f"⚡ *SINAL INSTITUCIONAL DETETADO*\n🪙 *Ativo:* {dados['ativo']}\n🎯 *Estratégia:* {dados['estrategia_ativa']}\n📊 *Sessão:* {dados['zona_operacional']}\n📈 *Macro:* {dados['tendencia_macro']} | 🛡️ *ATR:* {dados['atr_atual']}\n\n🟢 *Entrada:* {dados['entrada']}\n🔴 *SL:* {dados['stop_loss']}\n✅ *TP1:* {dados['tp1']} | *TP2:* {dados['tp2']} | *TP3:* {dados['tp3']}\n\n🧮 *Lote ($1k/1%):* {dados['lote_sugerido']}")
+                        msg = (f"⚡ *SINAL INSTITUCIONAL*\n🪙 Ativo: {dados['ativo']}\n🎯 Estratégia: {dados['estrategia_ativa']}\n\n🟢 Entrada: {dados['entrada']}\n🔴 SL: {dados['stop_loss']}\n✅ TP1: {dados['tp1']}")
                         enviar_telegram(msg)
                         hist.append({"ativo": dados["ativo"], "estrategia": dados["estrategia_ativa"], "entrada": dados["entrada"], "tp1": dados["tp1"], "tp2": dados["tp2"], "tp3": dados["tp3"], "sl": dados["stop_loss"], "resultado": "WAIT", "estado_fechado": False, "id": id_atual})
                         salvar_historico(hist)
-        except Exception as e: print("Erro no loop principal:", e)
+        except Exception as e: print("Erro no loop:", e)
         time.sleep(300)
 
 # ==========================================
@@ -352,172 +445,45 @@ if bot:
     threading.Thread(target=bot.infinity_polling, daemon=True).start()
 
 # ==========================================
-# ROTA DO PAINEL WEB (DASHBOARD)
+# ROTAS DO FLASK / API DO DASHBOARD
 # ==========================================
-DASHBOARD_HTML = """
-<!DOCTYPE html>
-<html lang="pt">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trading Shadow | Institutional Dashboard</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body { background-color: #0b0f19; color: #f3f4f6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; }
-        .container { max-width: 1000px; margin: auto; }
-        header { text-align: center; margin-bottom: 30px; border-bottom: 1px solid #1f2937; padding-bottom: 20px; }
-        h1 { color: #10b981; margin: 0; font-size: 24px; letter-spacing: 1px; }
-        p { color: #9ca3af; font-size: 14px; }
-        .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px; }
-        .card { background-color: #111827; border: 1px solid #1f2937; padding: 20px; border-radius: 8px; text-align: center; }
-        .card h3 { margin: 0; font-size: 14px; color: #9ca3af; text-transform: uppercase; }
-        .card .value { font-size: 22px; font-weight: bold; margin-top: 10px; color: #f3f4f6; }
-        .chart-container { background-color: #111827; border: 1px solid #1f2937; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
-        table { width: 100%; border-collapse: collapse; background-color: #111827; border-radius: 8px; overflow: hidden; border: 1px solid #1f2937; }
-        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #1f2937; font-size: 14px; }
-        th { background-color: #1f2937; color: #10b981; text-transform: uppercase; font-size: 12px; }
-        .badge-win { color: #10b981; font-weight: bold; }
-        .badge-loss { color: #ef4444; font-weight: bold; }
-        .badge-wait { color: #f59e0b; font-weight: bold; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>🛡️ TRADING SHADOW | QUANT DESK</h1>
-            <p>Painel de Controlo e Desempenho Institucional em Tempo Real</p>
-        </header>
+@app.route('/analisar', methods=['GET'])
+def analisar_api():
+    ativo = request.args.get('ativo', 'XAU')
+    teste = request.args.get('teste', 'false').lower() == 'true'
+    
+    if teste:
+        return jsonify({
+            "status": "SETUP_CONFIRMADO",
+            "ativo": f"{ativo}USD",
+            "estrategia_ativa": "TESTE DE SISTEMA INTEGRADO",
+            "entrada": 2350.50 if ativo == "XAU" else 65000.00,
+            "stop_loss": 2345.00 if ativo == "XAU" else 64500.00,
+            "tp1": 2356.00 if ativo == "XAU" else 65500.00,
+            "tp2": 2362.00 if ativo == "XAU" else 66000.00,
+            "tp3": 2370.00 if ativo == "XAU" else 67000.00,
+            "atr_atual": 12.5,
+            "probabilidade": "90%",
+            "explicacao_estrategia": "Teste operacional da base SQLite e rotas seguras.",
+            "data_hora": datetime.now(FUSO_LISBOA).strftime("%Y-%m-%d %H:%M:%S")
+        })
 
-        <div class="cards">
-            <div class="card">
-                <h3>Total de Pontos</h3>
-                <div class="value" id="total-pontos">0.0 pts</div>
-            </div>
-            <div class="card">
-                <h3>Taxa de Acerto (WinRate)</h3>
-                <div class="value" id="win-rate">0%</div>
-            </div>
-            <div class="card">
-                <h3>Ordens Fechadas</h3>
-                <div class="value" id="total-trades">0</div>
-            </div>
-        </div>
+    resultado = analisar_ativo_interno(ativo)
+    return jsonify(resultado)
 
-        <div class="chart-container">
-            <canvas id="equityChart" height="100"></canvas>
-        </div>
+@app.route('/radar-mensal', methods=['GET'])
+def radar_mensal():
+    prompt = "Resumo macroeconómico (máx 3 frases) sobre expectativas FED e Payroll para Ouro e Dólar."
+    res = chamar_ia_com_retry(prompt)
+    return jsonify({"radar": res})
 
-        <div style="background-color: #111827; border: 1px solid #1f2937; padding: 20px; border-radius: 8px;">
-            <h3 style="margin-top:0; color:#f3f4f6; font-size:16px;">Histórico de Operações</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Ativo</th>
-                        <th>Estratégia</th>
-                        <th>Entrada</th>
-                        <th>Resultado</th>
-                        <th>Pontos</th>
-                    </tr>
-                </thead>
-                <tbody id="tabela-corpo">
-                    <tr><td colspan="5" style="text-align:center;">A carregar dados...</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <script>
-        async function carregarDados() {
-            try {
-                let res = await fetch('/get-historico');
-                let hist = await res.json();
-                
-                let fechados = hist.filter(t => t.estado_fechado);
-                let totalPts = fechados.reduce((acc, t) => acc + (t.pontos || 0), 0);
-                let wins = fechados.filter(t => t.resultado === 'WIN').length;
-                let wr = fechados.length > 0 ? ((wins / fechados.length) * 100).toFixed(1) : 0;
-
-                document.getElementById('total-pontos').innerText = totalPts.toFixed(1) + " pts";
-                document.getElementById('win-rate').innerText = wr + "%";
-                document.getElementById('total-trades').innerText = fechados.length;
-
-                // Preencher Tabela
-                let tbody = document.getElementById('tabela-corpo');
-                tbody.innerHTML = "";
-                if (hist.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Sem registos recentes.</td></tr>';
-                    return;
-                }
-
-                // Linha do tempo para o gráfico
-                let labels = [];
-                let dataPoints = [];
-                let acumulado = 0;
-
-                hist.slice().reverse().forEach(t => {
-                    if(t.estado_fechado) {
-                        acumulado += (t.pontos || 0);
-                        labels.push(t.data_fecho || 'Data N/D');
-                        dataPoints.push(acumulado);
-                    }
-
-                    let tr = document.createElement('tr');
-                    let badgeClass = t.resultado === 'WIN' ? 'badge-win' : t.resultado === 'LOSS' ? 'badge-loss' : 'badge-wait';
-                    tr.innerHTML = `
-                        <td><b>${t.ativo}</b></td>
-                        <td>${t.estrategia}</td>
-                        <td>${t.entrada}</td>
-                        <td><span class="${badgeClass}">${t.resultado}</span></td>
-                        <td>${t.pontos || 0} pts</td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-
-                // Desenhar Gráfico
-                const ctx = document.getElementById('equityChart').getContext('2d');
-                new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: labels.length ? labels : ['Início'],
-                        datasets: [{
-                            label: 'Curva de Capital (Pontos Acumulados)',
-                            data: dataPoints.length ? dataPoints : [0],
-                            borderColor: '#10b981',
-                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                            borderWidth: 2,
-                            fill: true,
-                            tension: 0.3
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        plugins: { legend: { labels: { color: '#9ca3af' } } },
-                        scales: {
-                            x: { ticks: { color: '#9ca3af' }, grid: { color: '#1f2937' } },
-                            y: { ticks: { color: '#9ca3af' }, grid: { color: '#1f2937' } }
-                        }
-                    }
-                });
-
-            } catch (e) {
-                console.error("Erro ao carregar painel:", e);
-            }
-        }
-        carregarDados();
-    </script>
-</body>
-</html>
-"""
-
-@app.route('/dashboard')
-def dashboard():
-    return render_template_string(DASHBOARD_HTML)
-
-@app.route('/ping')
-def ping(): return jsonify({"status": "motor_aquecido_com_dashboard"})
+@app.route('/ping', methods=['GET'])
+def ping(): 
+    return jsonify({"status": "motor_sqlite_online"})
 
 @app.route('/get-historico', methods=['GET'])
-def get_historico(): return jsonify(ler_historico())
+def get_historico(): 
+    return jsonify(ler_historico())
 
 @app.route('/sync-historico', methods=['POST'])
 def sync_historico():
