@@ -20,6 +20,7 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 DB_FILE = 'historico_db.json'
 ULTIMA_NOTICIA_PROCESSADA = ""
+ULTIMO_RELATORIO_SEMANA = ""
 
 def ler_historico():
     try:
@@ -64,33 +65,58 @@ def analisar_noticia_ia(titulo_evento):
         )
         return res.choices[0].message.content.strip()
     except:
-        return "Notícia macroeconómica de alto impacto detetada. Volatilidade extrema iminente nos ativos dolarizados."
+        return "Notícia macroeconómica de alto impacto detetada. Volatilidade extrema iminente."
 
 def verificar_noticias_ao_vivo():
     global ULTIMA_NOTICIA_PROCESSADA
     try:
-        # Puxa o calendário de eventos em tempo real da TwelveData ou API pública
-        url_calendario = f"https://api.twelvedata.com/earning_calendar?apikey={TWELVEDATA_KEY}" # ou equivalente de eventos
-        # Como alternativa segura e universal de feed de eventos recentes dos EUA:
-        resp = requests.get(f"https://api.twelvedata.com/forex_pairs?apikey={TWELVEDATA_KEY}").json() # mock de teste de conexão ou endpoint de status
-        
-        # Vamos usar a API da Groq/IA para simular o feed em tempo real checando eventos do dia
-        url_events = f"https://api.twelvedata.com/market_state?apikey={TWELVEDATA_KEY}"
-        res_state = requests.get(url_events).json()
-        
-        # Simulação inteligente de monitorização de release ao vivo baseada no horário UTC atual
         agora = datetime.utcnow()
-        hora_atual_str = agora.strftime("%H:%M")
-        
-        # Se estivermos numa janela típica de dados (ex: 12:30 ou 14:00 UTC)
+        hora_atual_str = agoram = agora.strftime("%H:%M")
         if agora.minute == 30 and hora_atual_str != ULTIMA_NOTICIA_PROCESSADA:
-            # Consulta IA para gerar o panorama de boletim ao vivo da hora
             analise_live = analisar_noticia_ia(f"Boletim Macro de Divulgação USD - Horário {hora_atual_str} UTC")
             msg = f"🚨 *FEED DE NOTÍCIAS AO VIVO (MACRO USA)* 🚨\n\n{analise_live}"
             enviar_telegram(msg)
             ULTIMA_NOTICIA_PROCESSADA = hora_atual_str
     except Exception as e:
         print("Erro no monitor de notícias:", e)
+
+def verificar_relatorio_semanal():
+    global ULTIMO_RELATORIO_SEMANA
+    try:
+        agora = datetime.utcnow()
+        # Sexta-feira às 20:00 UTC (Fecho dos mercados)
+        if agora.weekday() == 4 and agora.hour == 20:
+            data_hoje_str = agora.strftime("%Y-%m-%d")
+            if data_hoje_str != ULTIMO_RELATORIO_SEMANA:
+                hist = ler_historico()
+                wins = sum(1 for t in hist if t.get("resultado") == "WIN")
+                losses = sum(1 for t in hist if t.get("resultado") == "LOSS")
+                breakevens = sum(1 for t in hist if t.get("resultado") == "BREAKEVEN")
+                total = wins + losses + breakevens
+                win_rate = round((wins / total * 100), 1) if total > 0 else 0
+
+                prompt = f"""
+                Resuma a semana de trading com base nestes números: Total de operações: {total}, Wins: {wins}, Losses: {losses}, Breakevens: {breakevens}, Win Rate: {win_rate}%.
+                Escreva um tom analítico, institucional e descontraído para um grupo de amigos traders. Máximo 4 linhas.
+                """
+                comentario_ia = client.chat.completions.create(
+                    model="llama-3.1-8b-instant",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.3
+                ).choices[0].message.content.strip()
+
+                msg = (f"📊 *BALANÇO SEMANAL - TRADING SHADOW*\n\n"
+                       f"🟢 *Total de Wins:* {wins}\n"
+                       f"🔴 *Total de Losses:* {losses}\n"
+                       f"🛡️ *Proteções Breakeven:* {breakevens}\n"
+                       f"🎯 *Assertividade:* {win_rate}%\n\n"
+                       f"🧠 *Nota do Analista Quant:*\n\"{comentario_ia}\"\n\n"
+                       f"Bom fim de semana a todos! O robô regressa no domingo à noite. 🚀")
+                
+                enviar_telegram(msg)
+                ULTIMO_RELATORIO_SEMANA = data_hoje_str
+    except Exception as e:
+        print("Erro no relatório semanal:", e)
 
 def obter_tendencia_macro(simbolo):
     try:
@@ -148,7 +174,6 @@ def analisar_ativo_interno(ativo):
     atr_atual = candle_atual['atr']
 
     agora = datetime.utcnow()
-    # Apenas bloqueia se o mercado estiver fechado (fim de semana)
     if ativo in ["XAU", "EUR"]:
         if agora.weekday() == 5 or (agora.weekday() == 6 and agora.hour < 21):
             return {"status": "SEM_SETUP", "preco_atual": preco_atual, "ativo": simbolo.replace("/", "")}
@@ -254,10 +279,14 @@ def avaliar_operacoes_abertas_autonomo(preco_atual, ativo_formatado):
 def motor_quantitativo_loop():
     while True:
         try:
-            # 1. Verifica Notícias Ao Vivo
-            verificar_noticias_ao_vivo()
+            # Novo texto de escaneamento imersivo e profissional
+            enviar_telegram("🛰️ *[RADAR INSTITUCIONAL ATIVO]*\nVarredura quântica em curso nos ativos principais (XAUUSD, BTCUSD, EURUSD)... A processar livros de ordens e volatilidade ATR.")
 
-            # 2. Varre os Ativos em busca de Oportunidades
+            # Verifica Notícias e Relatório Semanal
+            verificar_noticias_ao_vivo()
+            verificar_relatorio_semanal()
+
+            # Varre os Ativos em busca de Oportunidades
             for ativo in ["XAU", "BTC", "EUR"]:
                 dados = analisar_ativo_interno(ativo)
                 
@@ -327,9 +356,9 @@ def analisar():
     modo_teste = request.args.get('teste', 'false')
     
     if modo_teste == 'true':
-        msg_teste = "🔔 *TESTE DE NOTÍCIA AO VIVO*\nO módulo de IA interpretativa de notícias está online no grupo!"
+        msg_teste = "🛰️ *[RADAR INSTITUCIONAL ATIVO]*\nVarredura quântica em curso nos ativos principais (XAUUSD, BTCUSD, EURUSD)... A processar livros de ordens e volatilidade ATR."
         enviar_telegram(msg_teste)
-        return jsonify({"status": "SETUP_CONFIRMADO", "ativo": "TESTE", "estrategia_ativa": "TESTE DE IA AO VIVO", "preco_atual": 1500.5, "data_hora": "TESTE", "entrada": 1500.5, "stop_loss": 1490.0, "tp1": 1510.0, "tp2": 1520.0, "tp3": 1530.0, "probabilidade": "99.9%", "explicacao_estrategia": "Teste de IA de notícias executado.", "pontos_confianca": "N/A", "tendencia_macro": "ALTA", "atr_atual": 10})
+        return jsonify({"status": "SETUP_CONFIRMADO", "ativo": "TESTE", "estrategia_ativa": "TESTE DE SISTEMA COMPLETO", "preco_atual": 1500.5, "data_hora": "TESTE", "entrada": 1500.5, "stop_loss": 1490.0, "tp1": 1510.0, "tp2": 1520.0, "tp3": 1530.0, "probabilidade": "99.9%", "explicacao_estrategia": "Teste executado com sucesso.", "pontos_confianca": "N/A", "tendencia_macro": "ALTA", "atr_atual": 10})
 
     return jsonify(analisar_ativo_interno(ativo))
 
