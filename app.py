@@ -71,7 +71,7 @@ def verificar_noticias_ao_vivo():
     global ULTIMA_NOTICIA_PROCESSADA
     try:
         agora = datetime.utcnow()
-        hora_atual_str = agoram = agora.strftime("%H:%M")
+        hora_atual_str = agora.strftime("%H:%M")
         if agora.minute == 30 and hora_atual_str != ULTIMA_NOTICIA_PROCESSADA:
             analise_live = analisar_noticia_ia(f"Boletim Macro de Divulgação USD - Horário {hora_atual_str} UTC")
             msg = f"🚨 *FEED DE NOTÍCIAS AO VIVO (MACRO USA)* 🚨\n\n{analise_live}"
@@ -84,7 +84,6 @@ def verificar_relatorio_semanal():
     global ULTIMO_RELATORIO_SEMANA
     try:
         agora = datetime.utcnow()
-        # Sexta-feira às 20:00 UTC (Fecho dos mercados)
         if agora.weekday() == 4 and agora.hour == 20:
             data_hoje_str = agora.strftime("%Y-%m-%d")
             if data_hoje_str != ULTIMO_RELATORIO_SEMANA:
@@ -144,6 +143,13 @@ def analisar_ativo_interno(ativo):
     if ativo == "BTC": simbolo = "BTC/USD"
     elif ativo == "EUR": simbolo = "EUR/USD"
 
+    # Filtro de Segurança de Horários Críticos (Fim de semana e abertura de domingo)
+    agora = datetime.utcnow()
+    if ativo in ["XAU", "EUR"]:
+        # Se for sexta-feira após as 21:00 UTC, sábado inteiro, ou domingo antes das 22:00 UTC (evita gaps de abertura)
+        if (agora.weekday() == 4 and agora.hour >= 21) or agora.weekday() == 5 or (agora.weekday() == 6 and agora.hour < 22):
+            return {"status": "MERCADO_FECHADO"}
+
     url_dados = f"https://api.twelvedata.com/time_series?symbol={simbolo}&interval=15min&outputsize=50&apikey={TWELVEDATA_KEY}"
     try:
         resp_dados = requests.get(url_dados).json()
@@ -172,11 +178,6 @@ def analisar_ativo_interno(ativo):
     ema_9_atual = candle_atual['ema_9']
     ema_21_atual = candle_atual['ema_21']
     atr_atual = candle_atual['atr']
-
-    agora = datetime.utcnow()
-    if ativo in ["XAU", "EUR"]:
-        if agora.weekday() == 5 or (agora.weekday() == 6 and agora.hour < 21):
-            return {"status": "SEM_SETUP", "preco_atual": preco_atual, "ativo": simbolo.replace("/", "")}
 
     status_setup = False
     tp1 = tp2 = tp3 = sl = 0.0
@@ -242,36 +243,63 @@ def avaliar_operacoes_abertas_autonomo(preco_atual, ativo_formatado):
 
     for trade in hist:
         if trade["resultado"] == "WAIT" and trade["ativo"] == ativo_formatado:
+            # COMPRA
             if trade["tp1"] > trade["entrada"]:
-                if preco_atual >= trade["tp1"]: 
+                if preco_atual >= trade["tp3"]:
+                    trade["resultado"] = "WIN"
+                    mudou = True
+                    enviar_telegram(f"🎯 *TAKE PROFIT 3 ALCANÇADO (GAIN MAX)*\nO ativo *{ativo_formatado}* esmagou o TP3! Lucro máximo garantido. 🚀")
+                elif preco_atual >= trade["tp2"]:
+                    trade["resultado"] = "WIN"
+                    mudou = True
+                    enviar_telegram(f"✅ *TAKE PROFIT 2 ALCANÇADO (GAIN)*\nO ativo *{ativo_formatado}* bateu no TP2 com sucesso! Alvo intermediário garantido. 💰")
+                elif preco_atual >= trade["tp1"]: 
                     trade["resultado"] = "BREAKEVEN"
                     mudou = True
-                    enviar_telegram(f"🛡️ *ZERO RISCO ALCANÇADO*\nO ativo {ativo_formatado} atingiu o TP1!\nMova o Stop Loss para a entrada ({trade['entrada']}) agora.")
+                    enviar_telegram(f"🛡️ *ZERO RISCO ALCANÇADO (TP1 BATIDO)*\nO ativo *{ativo_formatado}* atingiu o TP1!\nMova o Stop Loss para a entrada ({trade['entrada']}) agora e proteja a operação.")
                 elif preco_atual <= trade["sl"]: 
                     trade["resultado"] = "LOSS"
                     mudou = True
-                    enviar_telegram(f"❌ *STOP LOSS ATINGIDO*\n{ativo_formatado} fechou a operação no prejuízo.")
+                    enviar_telegram(f"❌ *STOP LOSS ATINGIDO (LOSS)*\nO ativo *{ativo_formatado}* atingiu o Stop Loss. Gestão de risco aplicada, vamos para a próxima.")
+            
+            # VENDA
             else:
-                if preco_atual <= trade["tp1"]: 
+                if preco_atual <= trade["tp3"]:
+                    trade["resultado"] = "WIN"
+                    mudou = True
+                    enviar_telegram(f"🎯 *TAKE PROFIT 3 ALCANÇADO (GAIN MAX)*\nO ativo *{ativo_formatado}* esmagou o TP3! Lucro máximo garantido. 🚀")
+                elif preco_atual <= trade["tp2"]:
+                    trade["resultado"] = "WIN"
+                    mudou = True
+                    enviar_telegram(f"✅ *TAKE PROFIT 2 ALCANÇADO (GAIN)*\nO ativo *{ativo_formatado}* bateu no TP2 com sucesso! Alvo intermediário garantido. 💰")
+                elif preco_atual <= trade["tp1"]: 
                     trade["resultado"] = "BREAKEVEN"
                     mudou = True
-                    enviar_telegram(f"🛡️ *ZERO RISCO ALCANÇADO*\nO ativo {ativo_formatado} atingiu o TP1!\nMova o Stop Loss para a entrada ({trade['entrada']}) agora.")
+                    enviar_telegram(f"🛡️ *ZERO RISCO ALCANÇADO (TP1 BATIDO)*\nO ativo *{ativo_formatado}* atingiu o TP1!\nMova o Stop Loss para a entrada ({trade['entrada']}) agora e proteja a operação.")
                 elif preco_atual >= trade["sl"]: 
                     trade["resultado"] = "LOSS"
                     mudou = True
-                    enviar_telegram(f"❌ *STOP LOSS ATINGIDO*\n{ativo_formatado} fechou a operação no prejuízo.")
+                    enviar_telegram(f"❌ *STOP LOSS ATINGIDO (LOSS)*\nO ativo *{ativo_formatado}* atingiu o Stop Loss. Gestão de risco aplicada, vamos para a próxima.")
         
         elif trade["resultado"] == "BREAKEVEN" and trade["ativo"] == ativo_formatado:
             if trade["tp1"] > trade["entrada"]:
-                if preco_atual >= trade["tp2"]: 
+                if preco_atual >= trade["tp3"]: 
                     trade["resultado"] = "WIN"
                     mudou = True
-                    enviar_telegram(f"✅ *TAKE PROFIT FINAL ATINGIDO!*\n{ativo_formatado} fechou com Lucro Máximo!")
+                    enviar_telegram(f"🚀 *ALVO FINAL (TP3) ATINGIDO!* \nO ativo *{ativo_formatado}* fechou a operação com o potencial máximo de lucro!")
+                elif preco_atual <= trade["entrada"]: 
+                    trade["resultado"] = "WIN" 
+                    mudou = True
+                    enviar_telegram(f"⚖️ *SAÍDA NO ZERO-A-ZERO (BREAKEVEN)*\nO ativo *{ativo_formatado}* recuou e fechou na entrada protegida. Zero prejuízo.")
             else:
-                if preco_atual <= trade["tp2"]: 
+                if preco_atual <= trade["tp3"]: 
                     trade["resultado"] = "WIN"
                     mudou = True
-                    enviar_telegram(f"✅ *TAKE PROFIT FINAL ATINGIDO!*\n{ativo_formatado} fechou com Lucro Máximo!")
+                    enviar_telegram(f"🚀 *ALVO FINAL (TP3) ATINGIDO!* \nO ativo *{ativo_formatado}* fechou a operação com o potencial máximo de lucro!")
+                elif preco_atual >= trade["entrada"]: 
+                    trade["resultado"] = "WIN"
+                    mudou = True
+                    enviar_telegram(f"⚖️ *SAÍDA NO ZERO-A-ZERO (BREAKEVEN)*\nO ativo *{ativo_formatado}* recuou e fechou na entrada protegida. Zero prejuízo.")
 
     if mudou:
         salvar_historico(hist)
@@ -279,17 +307,17 @@ def avaliar_operacoes_abertas_autonomo(preco_atual, ativo_formatado):
 def motor_quantitativo_loop():
     while True:
         try:
-            # Novo texto de escaneamento imersivo e profissional
-            enviar_telegram("🛰️ *[RADAR INSTITUCIONAL ATIVO]*\nVarredura quântica em curso nos ativos principais (XAUUSD, BTCUSD, EURUSD)... A processar livros de ordens e volatilidade ATR.")
-
-            # Verifica Notícias e Relatório Semanal
+            # Varredura em silêncio absoluto (Foco e disciplina institucional)
             verificar_noticias_ao_vivo()
             verificar_relatorio_semanal()
 
-            # Varre os Ativos em busca de Oportunidades
+            # Foco estricto nos 3 ativos selecionados (Ouro, Bitcoin, Euro)
             for ativo in ["XAU", "BTC", "EUR"]:
                 dados = analisar_ativo_interno(ativo)
                 
+                if dados.get("status") == "MERCADO_FECHADO":
+                    continue
+
                 if dados.get("preco_atual"):
                     avaliar_operacoes_abertas_autonomo(dados["preco_atual"], dados["ativo"])
 
@@ -317,6 +345,7 @@ def motor_quantitativo_loop():
                             "entrada": dados["entrada"],
                             "tp1": dados["tp1"],
                             "tp2": dados["tp2"],
+                            "tp3": dados["tp3"],
                             "sl": dados["stop_loss"],
                             "prob": dados["probabilidade"],
                             "resultado": "WAIT",
@@ -356,9 +385,9 @@ def analisar():
     modo_teste = request.args.get('teste', 'false')
     
     if modo_teste == 'true':
-        msg_teste = "🛰️ *[RADAR INSTITUCIONAL ATIVO]*\nVarredura quântica em curso nos ativos principais (XAUUSD, BTCUSD, EURUSD)... A processar livros de ordens e volatilidade ATR."
+        msg_teste = "🔔 *TESTE DE SISTEMA BLINDADO*\nO motor quantitativo para Ouro, Bitcoin e Euro está operacional e a monitorizar o mercado!"
         enviar_telegram(msg_teste)
-        return jsonify({"status": "SETUP_CONFIRMADO", "ativo": "TESTE", "estrategia_ativa": "TESTE DE SISTEMA COMPLETO", "preco_atual": 1500.5, "data_hora": "TESTE", "entrada": 1500.5, "stop_loss": 1490.0, "tp1": 1510.0, "tp2": 1520.0, "tp3": 1530.0, "probabilidade": "99.9%", "explicacao_estrategia": "Teste executado com sucesso.", "pontos_confianca": "N/A", "tendencia_macro": "ALTA", "atr_atual": 10})
+        return jsonify({"status": "SETUP_CONFIRMADO", "ativo": "TESTE", "estrategia_ativa": "TESTE DE SISTEMA BLINDADO", "preco_atual": 1500.5, "data_hora": "TESTE", "entrada": 1500.5, "stop_loss": 1490.0, "tp1": 1510.0, "tp2": 1520.0, "tp3": 1530.0, "probabilidade": "99.9%", "explicacao_estrategia": "Teste executado com sucesso.", "pontos_confianca": "N/A", "tendencia_macro": "ALTA", "atr_atual": 10})
 
     return jsonify(analisar_ativo_interno(ativo))
 
