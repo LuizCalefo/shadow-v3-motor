@@ -94,7 +94,6 @@ def salvar_historico(dados_lista):
     try:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
-        # Substitui tudo de forma segura e atómica
         cursor.execute("DELETE FROM historico")
         for t in dados_lista:
             cursor.execute('''
@@ -129,7 +128,7 @@ def requisicao_com_retry(url, max_tentativas=3, espera=2):
             if resposta.status_code == 200:
                 return resposta.json()
         except Exception as e:
-            print(bah := f"Tentativa {tentativa+1} falhou para {url}: {e}")
+            print(f"Tentativa {tentativa+1} falhou para {url}: {e}")
         time.sleep(espera)
     return None
 
@@ -195,7 +194,8 @@ if bot:
         data_hoje_str = agora.strftime("%Y-%m-%d")
         
         hist = ler_historico()
-        hist_hoje = [t for t in hist if t.get("estado_fechado") and t.get("data_fecho"] == data_hoje_str]
+        # CORRIGIDO AQUI (Removido o colchete a mais)
+        hist_hoje = [t for t in hist if t.get("estado_fechado") and t.get("data_fecho") == data_hoje_str]
         
         if not hist_hoje:
             bot.reply_to(message, "📉 *Nenhuma operação fechada hoje.*", parse_mode="Markdown")
