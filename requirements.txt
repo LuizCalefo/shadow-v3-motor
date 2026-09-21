@@ -2,6 +2,7 @@ Flask
 flask-cors
 requests
 pandas
-google-genai
-gunicorn
 openai
+pytz
+pyTelegramBotAPI
+gunicorn
