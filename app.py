@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template_string
 from flask_cors import CORS
 import requests
 import pandas as pd
@@ -28,7 +28,6 @@ ULTIMO_RELATORIO_DIARIO = ""
 ULTIMO_RELATORIO_SEMANAL = ""
 CACHE_MACRO = {}
 
-# Inicializa o Bot Interativo
 bot = telebot.TeleBot(TELEGRAM_TOKEN) if TELEGRAM_TOKEN else None
 
 def ler_historico():
@@ -346,17 +345,184 @@ def motor_quantitativo_loop():
         time.sleep(300)
 
 # ==========================================
-# THREADS (O Cérebro Duplo)
+# THREADS
 # ==========================================
-# 1. Thread do Motor que varre o mercado
 threading.Thread(target=motor_quantitativo_loop, daemon=True).start()
-
-# 2. Thread do Bot que ouve o Telegram 24/7
 if bot:
     threading.Thread(target=bot.infinity_polling, daemon=True).start()
 
+# ==========================================
+# ROTA DO PAINEL WEB (DASHBOARD)
+# ==========================================
+DASHBOARD_HTML = """
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Shadow | Institutional Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background-color: #0b0f19; color: #f3f4f6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; }
+        .container { max-width: 1000px; margin: auto; }
+        header { text-align: center; margin-bottom: 30px; border-bottom: 1px solid #1f2937; padding-bottom: 20px; }
+        h1 { color: #10b981; margin: 0; font-size: 24px; letter-spacing: 1px; }
+        p { color: #9ca3af; font-size: 14px; }
+        .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px; }
+        .card { background-color: #111827; border: 1px solid #1f2937; padding: 20px; border-radius: 8px; text-align: center; }
+        .card h3 { margin: 0; font-size: 14px; color: #9ca3af; text-transform: uppercase; }
+        .card .value { font-size: 22px; font-weight: bold; margin-top: 10px; color: #f3f4f6; }
+        .chart-container { background-color: #111827; border: 1px solid #1f2937; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
+        table { width: 100%; border-collapse: collapse; background-color: #111827; border-radius: 8px; overflow: hidden; border: 1px solid #1f2937; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #1f2937; font-size: 14px; }
+        th { background-color: #1f2937; color: #10b981; text-transform: uppercase; font-size: 12px; }
+        .badge-win { color: #10b981; font-weight: bold; }
+        .badge-loss { color: #ef4444; font-weight: bold; }
+        .badge-wait { color: #f59e0b; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🛡️ TRADING SHADOW | QUANT DESK</h1>
+            <p>Painel de Controlo e Desempenho Institucional em Tempo Real</p>
+        </header>
+
+        <div class="cards">
+            <div class="card">
+                <h3>Total de Pontos</h3>
+                <div class="value" id="total-pontos">0.0 pts</div>
+            </div>
+            <div class="card">
+                <h3>Taxa de Acerto (WinRate)</h3>
+                <div class="value" id="win-rate">0%</div>
+            </div>
+            <div class="card">
+                <h3>Ordens Fechadas</h3>
+                <div class="value" id="total-trades">0</div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="equityChart" height="100"></canvas>
+        </div>
+
+        <div style="background-color: #111827; border: 1px solid #1f2937; padding: 20px; border-radius: 8px;">
+            <h3 style="margin-top:0; color:#f3f4f6; font-size:16px;">Histórico de Operações</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Ativo</th>
+                        <th>Estratégia</th>
+                        <th>Entrada</th>
+                        <th>Resultado</th>
+                        <th>Pontos</th>
+                    </tr>
+                </thead>
+                <tbody id="tabela-corpo">
+                    <tr><td colspan="5" style="text-align:center;">A carregar dados...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        async function carregarDados() {
+            try {
+                let res = await fetch('/get-historico');
+                let hist = await res.json();
+                
+                let fechados = hist.filter(t => t.estado_fechado);
+                let totalPts = fechados.reduce((acc, t) => acc + (t.pontos || 0), 0);
+                let wins = fechados.filter(t => t.resultado === 'WIN').length;
+                let wr = fechados.length > 0 ? ((wins / fechados.length) * 100).toFixed(1) : 0;
+
+                document.getElementById('total-pontos').innerText = totalPts.toFixed(1) + " pts";
+                document.getElementById('win-rate').innerText = wr + "%";
+                document.getElementById('total-trades').innerText = fechados.length;
+
+                // Preencher Tabela
+                let tbody = document.getElementById('tabela-corpo');
+                tbody.innerHTML = "";
+                if (hist.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Sem registos recentes.</td></tr>';
+                    return;
+                }
+
+                // Linha do tempo para o gráfico
+                let labels = [];
+                let dataPoints = [];
+                let acumulado = 0;
+
+                hist.slice().reverse().forEach(t => {
+                    if(t.estado_fechado) {
+                        acumulado += (t.pontos || 0);
+                        labels.push(t.data_fecho || 'Data N/D');
+                        dataPoints.push(acumulado);
+                    }
+
+                    let tr = document.createElement('tr');
+                    let badgeClass = t.resultado === 'WIN' ? 'badge-win' : t.resultado === 'LOSS' ? 'badge-loss' : 'badge-wait';
+                    tr.innerHTML = `
+                        <td><b>${t.ativo}</b></td>
+                        <td>${t.estrategia}</td>
+                        <td>${t.entrada}</td>
+                        <td><span class="${badgeClass}">${t.resultado}</span></td>
+                        <td>${t.pontos || 0} pts</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                // Desenhar Gráfico
+                const ctx = document.getElementById('equityChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels.length ? labels : ['Início'],
+                        datasets: [{
+                            label: 'Curva de Capital (Pontos Acumulados)',
+                            data: dataPoints.length ? dataPoints : [0],
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.3
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: { legend: { labels: { color: '#9ca3af' } } },
+                        scales: {
+                            x: { ticks: { color: '#9ca3af' }, grid: { color: '#1f2937' } },
+                            y: { ticks: { color: '#9ca3af' }, grid: { color: '#1f2937' } }
+                        }
+                    }
+                });
+
+            } catch (e) {
+                console.error("Erro ao carregar painel:", e);
+            }
+        }
+        carregarDados();
+    </script>
+</body>
+</html>
+"""
+
+@app.route('/dashboard')
+def dashboard():
+    return render_template_string(DASHBOARD_HTML)
+
 @app.route('/ping')
-def ping(): return jsonify({"status": "motor_aquecido_e_interativo"})
+def ping(): return jsonify({"status": "motor_aquecido_com_dashboard"})
+
+@app.route('/get-historico', methods=['GET'])
+def get_historico(): return jsonify(ler_historico())
+
+@app.route('/sync-historico', methods=['POST'])
+def sync_historico():
+    salvar_historico(request.json)
+    return jsonify({"status": "sucesso"})
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
