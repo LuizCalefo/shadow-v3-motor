@@ -6,3 +6,4 @@ openai
 pytz
 pyTelegramBotAPI
 gunicorn
+groq
