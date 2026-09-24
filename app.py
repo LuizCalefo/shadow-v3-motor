@@ -1,23 +1,35 @@
 import os
 import sqlite3
-import threading
 import time
+import logging
+import json
+import threading
 from datetime import datetime
 import numpy as np
 import pandas as pd
 import pytz
 import requests
 import telebot
-from flask import Flask, jsonify, render_template_string, request
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from flask import Flask, jsonify
 from flask_cors import CORS
 from openai import OpenAI
+from apscheduler.schedulers.background import BackgroundScheduler
+import websocket
+from dotenv import load_dotenv
+
+# Carrega as chaves secretas do teu ficheiro .env automaticamente!
+load_dotenv()
+
+# ==========================================
+# ⚙️ 1. CONFIGURAÇÕES GERAIS E LOGGING
+# ==========================================
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 CORS(app)
 
-# ==========================================
-# CONFIGURAÇÕES E VARIÁVEIS DE AMBIENTE
-# ==========================================
 GROQ_KEY = os.environ.get("GROQ_API_KEY")
 TWELVEDATA_KEY = os.environ.get("TWELVEDATA_KEY")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
@@ -28,573 +40,329 @@ bot = telebot.TeleBot(TELEGRAM_TOKEN) if TELEGRAM_TOKEN else None
 
 FUSO_LISBOA = pytz.timezone('Europe/Lisbon')
 DB_FILE = 'trading_shadow.db'
-
-ULTIMA_NOTICIA_PROCESSADA = ""
-ULTIMO_RELATORIO_DIARIO = ""
-ULTIMO_RELATORIO_SEMANAL = ""
 CACHE_MACRO = {}
 
 # ==========================================
-# CONEXÃO E GERENCIAMENTO DA BASE DE DADOS
+# 🗄️ 2. BASE DE DADOS TRANSACIONAL (SQLITE)
 # ==========================================
 def get_db_connection():
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+    conn = sqlite3.connect(DB_FILE, check_same_thread=False, timeout=10)
     conn.row_factory = sqlite3.Row
     return conn
 
 def inicializar_bd():
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS historico (
-                    id TEXT PRIMARY KEY,
-                    ativo TEXT,
-                    estrategia TEXT,
-                    entrada REAL,
-                    tp1 REAL,
-                    tp2 REAL,
-                    tp3 REAL,
-                    sl REAL,
-                    resultado TEXT,
-                    estado_fechado INTEGER,
-                    data_fecho TEXT,
-                    pontos REAL
-                )
-            ''')
-            conn.commit()
-    except Exception as e:
-        print("Erro ao criar BD SQLite:", e)
+    with get_db_connection() as conn:
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS historico (
+                id TEXT PRIMARY KEY,
+                ativo TEXT,
+                estrategia TEXT,
+                direcao TEXT,
+                entrada REAL,
+                tp1 REAL,
+                tp2 REAL,
+                tp3 REAL,
+                sl REAL,
+                resultado TEXT,
+                estado_fechado INTEGER,
+                data_fecho TEXT,
+                pontos REAL,
+                vpoc REAL
+            )
+        ''')
+        conn.commit()
+    logger.info("Base de dados inicializada com sucesso.")
 
 inicializar_bd()
 
-def ler_historico():
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM historico")
-            rows = cursor.fetchall()
-            
-            hist = []
-            for row in rows:
-                hist.append({
-                    "id": row["id"],
-                    "ativo": row["ativo"],
-                    "estrategia": row["estrategia"],
-                    "entrada": row["entrada"],
-                    "tp1": row["tp1"],
-                    "tp2": row["tp2"],
-                    "tp3": row["tp3"],
-                    "sl": row["sl"],
-                    "resultado": row["resultado"],
-                    "estado_fechado": bool(row["estado_fechado"]),
-                    "data_fecho": row["data_fecho"],
-                    "pontos": row["pontos"]
-                })
-            return hist
-    except Exception as e:
-        print("Erro ao ler BD:", e)
-        return []
+def inserir_trade(trade):
+    with get_db_connection() as conn:
+        conn.execute('''
+            INSERT OR IGNORE INTO historico 
+            (id, ativo, estrategia, direcao, entrada, tp1, tp2, tp3, sl, resultado, estado_fechado, vpoc, pontos)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            trade["id"], trade["ativo"], trade["estrategia"], trade["direcao"], 
+            trade["entrada"], trade["tp1"], trade["tp2"], trade["tp3"], trade["sl"], 
+            "WAIT", 0, trade.get("vpoc", 0.0), 0.0
+        ))
+        conn.commit()
 
-def salvar_historico(dados_lista):
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM historico")
-            for t in dados_lista:
-                cursor.execute('''
-                    INSERT OR REPLACE INTO historico 
-                    (id, ativo, estrategia, entrada, tp1, tp2, tp3, sl, resultado, estado_fechado, data_fecho, pontos)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    t.get("id"),
-                    t.get("ativo"),
-                    t.get("estrategia"),
-                    t.get("entrada"),
-                    t.get("tp1"),
-                    t.get("tp2"),
-                    t.get("tp3"),
-                    t.get("sl"),
-                    t.get("resultado", "WAIT"),
-                    1 if t.get("estado_fechado") else 0,
-                    t.get("data_fecho"),
-                    t.get("pontos", 0.0)
-                ))
-            conn.commit()
-    except Exception as e:
-        print("Erro ao salvar na BD:", e)
+def atualizar_trade(trade_id, resultado, estado_fechado, data_fecho, pontos):
+    with get_db_connection() as conn:
+        conn.execute('''
+            UPDATE historico SET resultado = ?, estado_fechado = ?, data_fecho = ?, pontos = ? WHERE id = ?
+        ''', (resultado, estado_fechado, data_fecho, pontos, trade_id))
+        conn.commit()
+
+def obter_trades_abertas():
+    with get_db_connection() as conn:
+        return [dict(row) for row in conn.execute("SELECT * FROM historico WHERE estado_fechado = 0").fetchall()]
 
 # ==========================================
-# REQUISIÇÕES E INTEGRAÇÃO DE IA
+# 🧠 3. MOTOR QUANTITATIVO E VOLUME PROFILE
 # ==========================================
-def requisicao_com_retry(url, max_tentativas=3, espera=2):
-    for tentativa in range(max_tentativas):
+def calcular_vpoc(df, periodos=20):
+    try:
+        df_recente = df.tail(periodos).copy()
+        if 'volume' not in df_recente.columns: return None
+        df_recente['price_bin'] = pd.cut(df_recente['close'], bins=12)
+        perfil_volume = df_recente.groupby('price_bin')['volume'].sum()
+        return round(perfil_volume.idxmax().mid, 2)
+    except Exception as e:
+        logger.error(f"Erro no cálculo do VPOC: {e}")
+        return None
+
+def requisicao_api(url, max_tentativas=3):
+    for _ in range(max_tentativas):
         try:
-            resposta = requests.get(url, timeout=10)
-            if resposta.status_code == 200:
-                return resposta.json()
-        except Exception as e:
-            print(f"Tentativa {tentativa+1} falhou para {url}: {e}")
-        time.sleep(espera)
+            resp = requests.get(url, timeout=10)
+            if resp.status_code == 200: return resp.json()
+        except: time.sleep(2)
     return None
 
-def chamar_ia_com_retry(prompt, max_tentativas=3):
-    if not client:
-        return "⚠️ Chave da API Groq não configurada."
-        
-    for tentativa in range(max_tentativas):
-        try:
-            res = client.chat.completions.create(
-                model="llama-3.1-8b-instant", 
-                messages=[{"role": "user", "content": prompt}], 
-                temperature=0.3
-            )
-            return res.choices[0].message.content.strip()
-        except Exception as e:
-            print(f"Tentativa IA {tentativa+1} falhou: {e}")
-            time.sleep(2)
-    return "⚠️ Serviço de IA temporariamente indisponível."
-
-def enviar_telegram(mensagem):
-    if not bot or not TELEGRAM_CHAT_ID: 
-        return
-    try:
-        bot.send_message(TELEGRAM_CHAT_ID, mensagem, parse_mode="HTML")
-    except Exception as e:
-        print("Erro ao enviar mensagem no Telegram:", e)
-
-# ==========================================
-# COMANDOS DO TELEGRAM
-# ==========================================
-if bot:
-    @bot.message_handler(commands=['status'])
-    def cmd_status(message):
-        agora = datetime.now(FUSO_LISBOA)
-        is_killzone = 8 <= agora.hour <= 17
-        zona = "🟢 Killzone Institucional (Londres/NY)" if is_killzone else "🔴 Baixo Volume / Ásia"
-        tendencia_xau = obter_tendencia_macro("XAU/USD")
-        
-        msg = (f"<b>🤖 MOTOR QUANTITATIVO ONLINE</b>\n\n"
-               f"🕒 <b>Hora local:</b> {agora.strftime('%H:%M')} (Lisboa)\n"
-               f"📊 <b>Sessão Atual:</b> {zona}\n"
-               f"📈 <b>Macro Tendência Ouro:</b> {tendencia_xau}\n"
-               f"📡 <b>Varredura:</b> Ativa (Base SQLite Segura)")
-        bot.reply_to(message, msg, parse_mode="HTML")
-
-    @bot.message_handler(commands=['abertas'])
-    def cmd_abertas(message):
-        hist = ler_historico()
-        abertas = [t for t in hist if not t.get("estado_fechado")]
-        
-        if not abertas:
-            bot.reply_to(message, "💤 <b>Nenhuma operação aberta neste momento.</b>", parse_mode="HTML")
-            return
-            
-        msg = "📂 <b>OPERAÇÕES EM ANDAMENTO:</b>\n\n"
-        for t in abertas:
-            estado = t.get('resultado', 'WAIT')
-            icone = "⏳" if estado == "WAIT" else "🛡️" if estado == "BREAKEVEN" else "🔥"
-            msg += f"{icone} <b>{t['ativo']}</b> ({t['estrategia']})\n └ Entrada: {t['entrada']} | Fase: {estado}\n\n"
-        
-        bot.reply_to(message, msg, parse_mode="HTML")
-
-    @bot.message_handler(commands=['placar'])
-    def cmd_placar(message):
-        agora = datetime.now(FUSO_LISBOA)
-        data_hoje_str = agora.strftime("%Y-%m-%d")
-        
-        hist = ler_historico()
-        hist_hoje = [t for t in hist if t.get("estado_fechado") and t.get("data_fecho") == data_hoje_str]
-        
-        if not hist_hoje:
-            bot.reply_to(message, "📉 <b>Nenhuma operação fechada hoje.</b>", parse_mode="HTML")
-            return
-            
-        w, l, z, pts, alvs, wr = compilar_estatisticas(hist_hoje)
-        msg = (f"📊 <b>PLACAR DE HOJE AO VIVO</b>\n\n"
-               f"⚖️ <b>Placar:</b> {w} Wins | {l} Loss | {z} Zero\n"
-               f"💰 <b>Pontos Capturados:</b> {pts} pts\n"
-               f"🎯 <b>Assertividade:</b> {wr}%\n")
-        bot.reply_to(message, msg, parse_mode="HTML")
-
-    @bot.message_handler(commands=['varrer'])
-    def cmd_varrer(message):
-        bot.reply_to(message, "🔍 <b>Forçando varredura imediata...</b> aguarde.", parse_mode="HTML")
-        resumos = []
-        for ativo in ["XAU", "BTC", "EUR"]:
-            dados = analisar_ativo_interno(ativo)
-            status = dados.get('status')
-            if status == "SETUP_CONFIRMADO":
-                resumos.append(f"🟢 <b>{ativo}:</b> Oportunidade detetada!")
-            elif status == "MERCADO_FECHADO":
-                resumos.append(f"💤 <b>{ativo}:</b> Mercado Fechado.")
-            else:
-                resumos.append(f"🔴 <b>{ativo}:</b> Sem setup no momento.")
-        
-        bot.send_message(message.chat.id, "\n".join(resumos), parse_mode="HTML")
-
-# ==========================================
-# LÓGICA QUANTITATIVA E ANÁLISE DE MERCADO
-# ==========================================
-def analisar_noticia_ia(titulo_evento, tipo="alerta"):
-    if tipo == "alerta":
-        prompt = f"Notícia macroeconómica ({titulo_evento}) vai sair agora. Escreva alerta curto (máx 3 linhas) para traders de Ouro e Dólar: Risco de volatilidade e spread. Use emojis."
-    else:
-        prompt = f"Notícia macroeconómica ({titulo_evento}) publicada nos EUA. Como gestor quantitativo, explique em 5 linhas o impacto no DXY e XAU/USD, cenário forte vs fraco e postura no gráfico. Use emojis."
-    
-    return chamar_ia_com_retry(prompt)
-
-def verificar_noticias_ao_vivo():
-    global ULTIMA_NOTICIA_PROCESSADA
-    try:
-        agora = datetime.now(FUSO_LISBOA)
-        hora_atual = agora.strftime("%H")
-        minuto_atual = agora.minute
-
-        if 25 <= minuto_atual <= 28 and hora_atual != ULTIMA_NOTICIA_PROCESSADA:
-            analise_live = analisar_noticia_ia(f"Boletim Macro USD - {hora_atual}:30", tipo="alerta")
-            enviar_telegram(f"🚨 <b>ALERTA DE VOLATILIDADE (PRÉ-NOTÍCIA)</b> 🚨\n\n{analise_live}")
-            
-        elif 35 <= minuto_atual <= 38 and hora_atual != ULTIMA_NOTICIA_PROCESSADA:
-            analise_pos = analisar_noticia_ia(f"Rescaldo Macro USD - {hora_atual}:30", tipo="pos")
-            enviar_telegram(f"📊 <b>ANÁLISE PÓS-NOTÍCIA (IMPACTO NO GRÁFICO)</b> 📊\n\n{analise_pos}")
-            ULTIMA_NOTICIA_PROCESSADA = hora_atual
-    except Exception as e:
-        print("Erro nas notícias:", e)
-
-def compilar_estatisticas(hist_filtrado):
-    wins = losses = zeros = pontos_totais = 0
-    alvos = {"TP1": 0, "TP3": 0} 
-    for t in hist_filtrado:
-        res = t.get("resultado")
-        if res == "WIN":
-            wins += 1
-            alvo_atingido = t.get("alvo", "TP1")
-            if alvo_atingido in alvos: 
-                alvos[alvo_atingido] += 1
-        elif res == "LOSS": 
-            losses += 1
-        elif res == "ZERO": 
-            zeros += 1
-        pontos_totais += t.get("pontos", 0.0)
-
-    total = wins + losses + zeros
-    win_rate = round((wins / total * 100), 1) if total > 0 else 0
-    return wins, losses, zeros, round(pontos_totais, 1), alvos, win_rate
-
-def verificar_relatorios():
-    global ULTIMO_RELATORIO_DIARIO, ULTIMO_RELATORIO_SEMANAL
-    try:
-        agora = datetime.now(FUSO_LISBOA)
-        data_hoje_str = agora.strftime("%Y-%m-%d")
-        hist = ler_historico()
-        hist_fechado = [t for t in hist if t.get("estado_fechado")]
-
-        if agora.hour == 21 and 50 <= agora.minute <= 59 and data_hoje_str != ULTIMO_RELATORIO_DIARIO:
-            hist_hoje = [t for t in hist_fechado if t.get("data_fecho") == data_hoje_str]
-            if hist_hoje:
-                w, l, z, pts, alvs, wr = compilar_estatisticas(hist_hoje)
-                enviar_telegram(f"📅 <b>FECHO DO DIÁRIO</b>\n⚖️ Wins: {w} | Loss: {l}\n💰 Pontos: {pts} pts")
-            ULTIMO_RELATORIO_DIARIO = data_hoje_str
-
-        if agora.weekday() == 4 and agora.hour == 22 and 0 <= agora.minute <= 10 and data_hoje_str != ULTIMO_RELATORIO_SEMANAL:
-            semana_atual = agora.isocalendar()[1]
-            hist_semana = [t for t in hist_fechado if t.get("data_fecho") and datetime.strptime(t.get("data_fecho"), "%Y-%m-%d").isocalendar()[1] == semana_atual]
-            if hist_semana:
-                w, l, z, pts, alvs, wr = compilar_estatisticas(hist_semana)
-                comentario_ia = chamar_ia_com_retry(f"Resumo semanal: {w} Wins, {l} Losses, {pts} pts, {wr}% assertividade. Análise profissional de 3 linhas.")
-                enviar_telegram(f"📊 <b>BALANÇO SEMANAL</b>\nWins: {w} | Losses: {l} | Total: {pts} pts\n\n\"{comentario_ia}\"")
-            ULTIMO_RELATORIO_SEMANAL = data_hoje_str
-    except Exception as e:
-        print("Erro ao verificar relatórios:", e)
-
 def obter_tendencia_macro(simbolo):
-    agora_timestamp = time.time()
-    if simbolo in CACHE_MACRO and (agora_timestamp - CACHE_MACRO[simbolo]['timestamp']) < 3600:
+    agora = time.time()
+    if simbolo in CACHE_MACRO and (agora - CACHE_MACRO[simbolo]['timestamp']) < 3600:
         return CACHE_MACRO[simbolo]['tendencia']
-    try:
-        req_1h = requisicao_com_retry(f"https://api.twelvedata.com/time_series?symbol={simbolo}&interval=1h&outputsize=25&apikey={TWELVEDATA_KEY}")
-        req_4h = requisicao_com_retry(f"https://api.twelvedata.com/time_series?symbol={simbolo}&interval=4h&outputsize=25&apikey={TWELVEDATA_KEY}")
         
-        if not req_1h or not req_4h or "values" not in req_1h or "values" not in req_4h: 
-            return CACHE_MACRO.get(simbolo, {}).get('tendencia', 'LATERAL')
-            
-        df1 = pd.DataFrame(req_1h['values'])[::-1].reset_index(drop=True)
-        df1['close'] = df1['close'].astype(float)
-        ema9_1h = df1['close'].ewm(span=9, adjust=False).mean().iloc[-1]
-        ema21_1h = df1['close'].ewm(span=21, adjust=False).mean().iloc[-1]
-        
-        df4 = pd.DataFrame(req_4h['values'])[::-1].reset_index(drop=True)
-        df4['close'] = df4['close'].astype(float)
-        ema9_4h = df4['close'].ewm(span=9, adjust=False).mean().iloc[-1]
-        ema21_4h = df4['close'].ewm(span=21, adjust=False).mean().iloc[-1]
-        
-        tendencia = "ALTA" if ema9_1h > ema21_1h and ema9_4h > ema21_4h else "BAIXA" if ema9_1h < ema21_1h and ema9_4h < ema21_4h else "LATERAL"
-        CACHE_MACRO[simbolo] = {'tendencia': tendencia, 'timestamp': agora_timestamp}
-        return tendencia
-    except: 
-        return CACHE_MACRO.get(simbolo, {}).get('tendencia', 'LATERAL')
+    url = f"https://api.twelvedata.com/time_series?symbol={simbolo}&interval=4h&outputsize=25&apikey={TWELVEDATA_KEY}"
+    dados = requisicao_api(url)
+    if not dados or "values" not in dados: return "LATERAL"
+    
+    df = pd.DataFrame(dados['values'])[::-1].reset_index(drop=True)
+    df['close'] = df['close'].astype(float)
+    ema9, ema21 = df['close'].ewm(span=9).mean().iloc[-1], df['close'].ewm(span=21).mean().iloc[-1]
+    
+    tend = "ALTA" if ema9 > ema21 else "BAIXA"
+    CACHE_MACRO[simbolo] = {'tendencia': tend, 'timestamp': agora}
+    return tend
 
-def calcular_lote(ativo, entrada, stop_loss):
-    distancia = abs(entrada - stop_loss)
-    if distancia == 0:
-        return 0.01
-    try:
-        if "XAU" in ativo: 
-            return round(10.0 / (distancia * 100), 2)
-        elif "EUR" in ativo: 
-            return round(10.0 / (distancia * 100000), 2)
-        elif "BTC" in ativo: 
-            return round(10.0 / distancia, 3)
-    except: 
-        return 0.01
-    return 0.01
-
-def analisar_ativo_interno(ativo):
-    simbolo = "XAU/USD"
-    if ativo == "BTC": simbolo = "BTC/USD"
-    elif ativo == "EUR": simbolo = "EUR/USD"
-
+def analisar_ativo(ativo, simbolo):
     agora = datetime.now(FUSO_LISBOA)
-    if ativo in ["XAU", "EUR"]:
-        if (agora.weekday() == 4 and agora.hour >= 21) or agora.weekday() == 5 or (agora.weekday() == 6 and agora.hour < 22):
-            return {"status": "MERCADO_FECHADO"}
+    # Filtro para não operar nos fins de semana (fecho de sexta até abertura de domingo à noite)
+    if ativo in ["XAU", "EUR"] and (agora.weekday() == 5 or (agora.weekday() == 4 and agora.hour >= 21) or (agora.weekday() == 6 and agora.hour < 22)):
+        return None
 
-    is_killzone = 8 <= agora.hour <= 17
-    zona_operacional = "🟢 Killzone Institucional (Londres/NY)" if is_killzone else "🔴 Baixo Volume / Ásia"
+    dados = requisicao_api(f"https://api.twelvedata.com/time_series?symbol={simbolo}&interval=15min&outputsize=50&apikey={TWELVEDATA_KEY}")
+    if not dados or "values" not in dados: return None
 
-    resp_dados = requisicao_com_retry(f"https://api.twelvedata.com/time_series?symbol={simbolo}&interval=15min&outputsize=50&apikey={TWELVEDATA_KEY}")
-    if not resp_dados or "values" not in resp_dados: 
-        return {"status": "ERRO_API"}
-
-    df = pd.DataFrame(resp_dados["values"])[::-1].reset_index(drop=True) 
-    for col in ['close', 'high', 'low', 'open']: 
-        df[col] = df[col].astype(float)
+    df = pd.DataFrame(dados["values"])[::-1].reset_index(drop=True)
+    for c in ['close', 'high', 'low', 'open']: df[c] = df[c].astype(float)
+    if 'volume' in df.columns: df['volume'] = df['volume'].astype(float)
     
     df['ema_9'] = df['close'].ewm(span=9, adjust=False).mean()
     df['ema_21'] = df['close'].ewm(span=21, adjust=False).mean()
-    df['prev_close'] = df['close'].shift(1)
     
-    # Cálculo Vetorizado do ATR (Mais eficiente que o .apply)
-    df['tr0'] = df['high'] - df['low']
-    df['tr1'] = (df['high'] - df['prev_close']).abs()
-    df['tr2'] = (df['low'] - df['prev_close']).abs()
-    df['tr'] = df[['tr0', 'tr1', 'tr2']].max(axis=1)
-    df['atr'] = df['tr'].rolling(window=14).mean()
+    df['tr'] = np.maximum(df['high'] - df['low'], np.maximum(abs(df['high'] - df['close'].shift(1)), abs(df['low'] - df['close'].shift(1))))
+    df['atr'] = df['tr'].rolling(14).mean()
 
-    candle_atual, candle_anterior = df.iloc[-1], df.iloc[-2]
+    candle = df.iloc[-1]
     casas_dec = 5 if ativo == "EUR" else 2
-    preco_atual = round(candle_atual['close'], casas_dec)
-    ema_9_atual = candle_atual['ema_9']
-    ema_21_atual = candle_atual['ema_21']
-    atr_atual = candle_atual['atr']
-
-    status_setup, tp1, tp2, tp3, sl, estrategia, prob = False, 0.0, 0.0, 0.0, 0.0, "", 0
+    preco, ema9, ema21, atr = round(candle['close'], casas_dec), candle['ema_9'], candle['ema_21'], candle['atr']
     tendencia = obter_tendencia_macro(simbolo)
+    vpoc = calcular_vpoc(df)
     
-    # Condição de Compra
-    if ema_9_atual > ema_21_atual and tendencia == "ALTA":
-        if -atr_atual <= (candle_atual['low'] - ema_21_atual) <= atr_atual:
-            status_setup, estrategia, prob = True, "PULLBACK FLEXÍVEL (COMPRA)", 82 if is_killzone else 70
-        elif candle_anterior['close'] < candle_anterior['ema_9'] and preco_atual > ema_9_atual:
-            status_setup, estrategia, prob = True, "MOMENTUM SCALPER (COMPRA)", 75 if is_killzone else 65
-            
-        if status_setup:
-            sl = round(preco_atual - (1.5 * atr_atual), casas_dec)
-            tp1, tp2, tp3 = [round(preco_atual + (m * atr_atual), casas_dec) for m in [1.0, 2.0, 3.0]]
+    setup = None
+    # Lógica de Setup
+    if ema9 > ema21 and tendencia == "ALTA":
+        if -atr <= (candle['low'] - ema21) <= atr:
+            sl = round(preco - (1.5 * atr), casas_dec)
+            setup = {"direcao": "COMPRA", "estrategia": "Pullback Institucional"}
+    elif ema9 <= ema21 and tendencia == "BAIXA":
+        if candle['high'] >= ema9 and candle['close'] < ema9:
+            sl = round(preco + (1.5 * atr), casas_dec)
+            setup = {"direcao": "VENDA", "estrategia": "Rejeição de Liquidez"}
 
-    # Condição de Venda
-    elif ema_9_atual <= ema_21_atual and tendencia == "BAIXA":
-        if candle_atual['high'] >= ema_9_atual and candle_atual['close'] < ema_9_atual:
-            status_setup, estrategia, prob = True, "REJEIÇÃO DE TOPO (VENDA)", 78 if is_killzone else 68
-            sl = round(preco_atual + (1.5 * atr_atual), casas_dec)
-            tp1, tp2, tp3 = [round(preco_atual - (m * atr_atual), casas_dec) for m in [1.0, 2.0, 3.0]]
-
-    resultado = {"ativo": simbolo.replace("/", ""), "preco_atual": preco_atual, "atr_atual": round(atr_atual, casas_dec), "status": "SEM_SETUP"}
-    if status_setup:
-        resultado.update({
-            "status": "SETUP_CONFIRMADO", 
-            "estrategia_ativa": estrategia, 
-            "entrada": preco_atual, 
-            "stop_loss": sl, 
-            "tp1": tp1, 
-            "tp2": tp2, 
-            "tp3": tp3, 
-            "probabilidade": f"{prob}%", 
-            "tendencia_macro": tendencia, 
-            "zona_operacional": zona_operacional, 
-            "lote_sugerido": calcular_lote(simbolo, preco_atual, sl), 
-            "data_hora": resp_dados["values"][0]["datetime"]
+    if setup:
+        mult = 1 if setup["direcao"] == "COMPRA" else -1
+        setup.update({
+            "ativo": ativo,
+            "entrada": preco,
+            "sl": sl,
+            "tp1": round(preco + (mult * atr * 1.0), casas_dec),
+            "tp2": round(preco + (mult * atr * 2.0), casas_dec),
+            "tp3": round(preco + (mult * atr * 3.0), casas_dec),
+            "vpoc": vpoc if vpoc else 0.0,
+            "data_hora": dados["values"][0]["datetime"]
         })
-    return resultado
+        setup["id"] = f"{ativo}_{setup['direcao']}_{setup['data_hora'].replace(' ', '_')}"
+        return setup
+    return None
 
-def fechar_trade_contabilidade(trade, resultado, alvo, preco_saida):
-    trade["resultado"] = resultado
-    trade["estado_fechado"] = True
-    trade["data_fecho"] = datetime.now(FUSO_LISBOA).strftime("%Y-%m-%d")
-    trade["alvo"] = alvo
-    
-    is_compra = trade["tp1"] > trade["entrada"]
-    diff = preco_saida - trade["entrada"] if is_compra else trade["entrada"] - preco_saida
-    pts = diff * 100000 if "EUR" in trade["ativo"] else diff * 100 if "XAU" in trade["ativo"] else diff
-    trade["pontos"] = round(pts, 1)
-
-def avaliar_operacoes_abertas_autonomo(preco_atual, ativo_formatado):
-    hist = ler_historico()
-    mudou = False
-    for trade in hist:
-        if trade.get("estado_fechado"): 
-            continue
-        is_compra = trade["tp1"] > trade["entrada"]
-
-        if trade["resultado"] == "WAIT" and trade["ativo"] == ativo_formatado:
-            if is_compra:
-                if preco_atual >= trade["tp3"]: 
-                    fechar_trade_contabilidade(trade, "WIN", "TP3", trade["tp3"])
-                    mudou = True
-                    enviar_telegram(f"🎯 <b>TP3 ALCANÇADO (+{trade['pontos']} pts)</b>\n<b>{ativo_formatado}</b>")
-                elif preco_atual >= trade["tp1"]: 
-                    trade["resultado"] = "BREAKEVEN"
-                    mudou = True
-                    enviar_telegram(f"🏆 <b>BREAKEVEN (TP1)</b>\n<b>{ativo_formatado}</b> Risco anulado.")
-                elif preco_atual <= trade["sl"]: 
-                    fechar_trade_contabilidade(trade, "LOSS", "SL", trade["sl"])
-                    mudou = True
-                    enviar_telegram(f"❌ <b>LOSS</b> em {ativo_formatado}")
-            else: 
-                if preco_atual <= trade["tp3"]: 
-                    fechar_trade_contabilidade(trade, "WIN", "TP3", trade["tp3"])
-                    mudou = True
-                    enviar_telegram(f"🎯 <b>TP3 ALCANÇADO (+{trade['pontos']} pts)</b>\n<b>{ativo_formatado}</b>")
-                elif preco_atual <= trade["tp1"]: 
-                    trade["resultado"] = "BREAKEVEN"
-                    mudou = True
-                    enviar_telegram(f"🏆 <b>BREAKEVEN (TP1)</b>\n<b>{ativo_formatado}</b> Risco anulado.")
-                elif preco_atual >= trade["sl"]: 
-                    fechar_trade_contabilidade(trade, "LOSS", "SL", trade["sl"])
-                    mudou = True
-                    enviar_telegram(f"❌ <b>LOSS</b> em {ativo_formatado}")
-        
-        elif trade["resultado"] == "BREAKEVEN" and trade["ativo"] == ativo_formatado:
-            if is_compra:
-                if preco_atual >= trade["tp3"]: 
-                    fechar_trade_contabilidade(trade, "WIN", "TP3", trade["tp3"])
-                    mudou = True
-                elif preco_atual >= trade["tp2"]: 
-                    trade["resultado"] = "TRAILING_TP1"
-                    mudou = True
-                elif preco_atual <= trade["entrada"]: 
-                    fechar_trade_contabilidade(trade, "ZERO", "ZERO", trade["entrada"])
-                    mudou = True
-            else:
-                if preco_atual <= trade["tp3"]: 
-                    fechar_trade_contabilidade(trade, "WIN", "TP3", trade["tp3"])
-                    mudou = True
-                elif preco_atual <= trade["tp2"]: 
-                    trade["resultado"] = "TRAILING_TP1"
-                    mudou = True
-                elif preco_atual >= trade["entrada"]: 
-                    fechar_trade_contabilidade(trade, "ZERO", "ZERO", trade["entrada"])
-                    mudou = True
-
-    if mudou: 
-        salvar_historico(hist)
-
-def motor_quantitativo_loop():
-    while True:
+def verificar_setups():
+    for ativo, simbolo in [("XAU", "XAU/USD"), ("BTC", "BTC/USD"), ("EUR", "EUR/USD")]:
         try:
-            verificar_noticias_ao_vivo()
-            verificar_relatorios()
-            for ativo in ["XAU", "BTC", "EUR"]:
-                dados = analisar_ativo_interno(ativo)
-                if dados.get("status") in ["MERCADO_FECHADO", "ERRO_API"]: 
-                    continue
-                if dados.get("preco_atual"): 
-                    avaliar_operacoes_abertas_autonomo(dados["preco_atual"], dados["ativo"])
+            setup = analisar_ativo(ativo, simbolo)
+            if setup:
+                with get_db_connection() as conn:
+                    existe = conn.execute("SELECT 1 FROM historico WHERE id = ?", (setup["id"],)).fetchone()
                 
-                if dados.get("status") == "SETUP_CONFIRMADO":
-                    id_atual = dados["ativo"] + dados["estrategia_ativa"] + dados["data_hora"]
-                    hist = ler_historico()
-                    if not any(t["id"] == id_atual for t in hist):
-                        msg = (f"⚡ <b>SINAL INSTITUCIONAL</b>\n"
-                               f"🪙 Ativo: {dados['ativo']}\n"
-                               f"🎯 Estratégia: {dados['estrategia_ativa']}\n\n"
-                               f"🟢 Entrada: {dados['entrada']}\n"
-                               f"🔴 SL: {dados['stop_loss']}\n"
-                               f"✅ TP1: {dados['tp1']}")
-                        enviar_telegram(msg)
-                        hist.append({
-                            "ativo": dados["ativo"], 
-                            "estrategia": dados["estrategia_ativa"], 
-                            "entrada": dados["entrada"], 
-                            "tp1": dados["tp1"], 
-                            "tp2": dados["tp2"], 
-                            "tp3": dados["tp3"], 
-                            "sl": dados["stop_loss"], 
-                            "resultado": "WAIT", 
-                            "estado_fechado": False, 
-                            "id": id_atual
-                        })
-                        salvar_historico(hist)
-        except Exception as e: 
-            print("Erro no loop principal:", e)
-            
-        time.sleep(300)
+                if not existe:
+                    inserir_trade(setup)
+                    vpoc_str = f"<code>{setup['vpoc']}</code>" if setup['vpoc'] else "Indisponível"
+                    emoji_dir = "🟢 COMPRA" if setup["direcao"] == "COMPRA" else "🔴 VENDA"
+                    
+                    msg = (
+                        f"⚡ <b>𝐏𝐑𝐄𝐌𝐈𝐔𝐌 𝐒𝐈𝐆𝐍𝐀𝐋 | {setup['ativo']}</b> ⚡\n"
+                        f"━━━━━━━━━━━━━━━━━━━━\n"
+                        f"🎯 <b>Setup:</b> {setup['estrategia']}\n"
+                        f"📈 <b>Direção:</b> {emoji_dir}\n\n"
+                        f"📍 <b>Entrada:</b> <code>{setup['entrada']}</code>\n"
+                        f"🛑 <b>Stop Loss:</b> <code>{setup['sl']}</code>\n\n"
+                        f"✅ <b>TP 1:</b> <code>{setup['tp1']}</code> (RR 1:1)\n"
+                        f"✅ <b>TP 2:</b> <code>{setup['tp2']}</code> (RR 1:2)\n"
+                        f"✅ <b>TP 3:</b> <code>{setup['tp3']}</code> (RR 1:3)\n\n"
+                        f"📊 <b>Filtro VPOC (Volume):</b> {vpoc_str}\n"
+                        f"<i>Gestão de Risco: Arriscar max 1% do capital.</i>\n"
+                        f"━━━━━━━━━━━━━━━━━━━━"
+                    )
+                    markup = InlineKeyboardMarkup()
+                    markup.add(InlineKeyboardButton("📈 Ver Gráfico (TradingView)", url=f"https://www.tradingview.com/chart/?symbol={ativo}USD"))
+                    enviar_telegram(msg, markup)
+        except Exception as e:
+            logger.error(f"Erro a analisar {ativo}: {e}")
 
 # ==========================================
-# INICIALIZAÇÃO DE THREADS
+# ⚡ 4. WEBSOCKETS (Gestão ao Milissegundo)
 # ==========================================
-threading.Thread(target=motor_quantitativo_loop, daemon=True).start()
+def gerir_trade_tick(ativo, preco_live):
+    abertas = obter_trades_abertas()
+    hoje = datetime.now(FUSO_LISBOA).strftime("%Y-%m-%d")
+
+    for t in abertas:
+        if t["ativo"] != ativo: continue
+        is_compra = t["direcao"] == "COMPRA"
+        fechar, resultado, p_saida = False, "", 0.0
+
+        if is_compra:
+            if preco_live >= t["tp3"]: fechar, resultado, p_saida = True, "WIN", t["tp3"]
+            elif preco_live <= t["sl"] and t["resultado"] == "WAIT": fechar, resultado, p_saida = True, "LOSS", t["sl"]
+            elif preco_live <= t["entrada"] and t["resultado"] == "BREAKEVEN": fechar, resultado, p_saida = True, "ZERO", t["entrada"]
+            elif preco_live >= t["tp1"] and t["resultado"] == "WAIT":
+                atualizar_trade(t["id"], "BREAKEVEN", 0, None, 0)
+                enviar_telegram(f"🛡️ <b>BREAKEVEN (TP1 Alcançado)</b>\nAtivo: <b>{t['ativo']}</b>\nO teu Stop Loss foi movido para a entrada. Risco nulo.")
+        else:
+            if preco_live <= t["tp3"]: fechar, resultado, p_saida = True, "WIN", t["tp3"]
+            elif preco_live >= t["sl"] and t["resultado"] == "WAIT": fechar, resultado, p_saida = True, "LOSS", t["sl"]
+            elif preco_live >= t["entrada"] and t["resultado"] == "BREAKEVEN": fechar, resultado, p_saida = True, "ZERO", t["entrada"]
+            elif preco_live <= t["tp1"] and t["resultado"] == "WAIT":
+                atualizar_trade(t["id"], "BREAKEVEN", 0, None, 0)
+                enviar_telegram(f"🛡️ <b>BREAKEVEN (TP1 Alcançado)</b>\nAtivo: <b>{t['ativo']}</b>\nO teu Stop Loss foi movido para a entrada. Risco nulo.")
+
+        if fechar:
+            diff = abs(t["entrada"] - p_saida)
+            pts = diff * 100 if "XAU" in ativo else diff * 100000 if "EUR" in ativo else diff
+            if resultado == "LOSS": pts = -pts
+            atualizar_trade(t["id"], resultado, 1, hoje, round(pts, 1))
+            icone = "🎯 WIN (Take Profit 3)" if resultado == "WIN" else "❌ LOSS (Stop Loss)" if resultado == "LOSS" else "⚖️ ZERO (Saiu no 0 a 0)"
+            enviar_telegram(f"{icone}\nAtivo: <b>{t['ativo']}</b>\nPontos capturados: {round(pts, 1)}")
+
+def on_ws_message(ws, message):
+    try:
+        dados = json.loads(message)
+        if dados.get('event') == 'price':
+            ativo = dados['symbol'].replace('/USD', '')
+            preco_live = float(dados['price'])
+            gerir_trade_tick(ativo, preco_live)
+    except Exception as e:
+        logger.error(f"Erro WS Parse: {e}")
+
+def on_ws_open(ws):
+    sub_msg = {"action": "subscribe", "params": {"symbols": "XAU/USD,EUR/USD,BTC/USD"}}
+    ws.send(json.dumps(sub_msg))
+    logger.info("📡 WebSocket Institucional conectado! A ler Ticks em tempo real.")
+
+def iniciar_stream_precos():
+    URL_WS = f"wss://ws.twelvedata.com/v1/quotes/price?apikey={TWELVEDATA_KEY}"
+    while True: # Loop de auto-reconnect
+        try:
+            ws = websocket.WebSocketApp(URL_WS, on_open=on_ws_open, on_message=on_ws_message)
+            ws.run_forever(ping_interval=30, ping_timeout=10)
+        except Exception as e:
+            logger.warning(f"WebSocket desconectado. A tentar novamente em 5s... Erro: {e}")
+        time.sleep(5)
+
+# ==========================================
+# 🤖 5. IA MACRO E BOLETIM MATINAL
+# ==========================================
+def emitir_boletim_macro():
+    if not bot: return
+    try:
+        prompt = (
+            "Atue como um Analista Quantitativo Chefe de Wall Street. Escreva um boletim matinal de 4 tópicos curtos e diretos "
+            "para traders de Ouro (XAU/USD) e Forex (EUR/USD). Foque-se na força do Dólar hoje, sentimento de risco global "
+            "e eventos macro. Use linguagem técnica e emojis."
+        )
+        res = client.chat.completions.create(model="llama-3.1-8b-instant", messages=[{"role": "user", "content": prompt}], temperature=0.3)
+        analise = res.choices[0].message.content.strip()
+        
+        msg = (
+            "🌅 <b>BOLETIM MACRO INSTITUCIONAL | ABERTURA LONDRES</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"{analise}\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "<i>Gestão de Risco é inegociável. Boa sessão a todos.</i> 💼"
+        )
+        enviar_telegram(msg)
+        logger.info("Boletim matinal enviado com sucesso.")
+    except Exception as e:
+        logger.error(f"Falha ao emitir boletim IA: {e}")
+
+# ==========================================
+# 📱 6. TELEGRAM BOT (UI Premium)
+# ==========================================
+def enviar_telegram(mensagem, reply_markup=None):
+    if not bot or not TELEGRAM_CHAT_ID: return
+    try: bot.send_message(TELEGRAM_CHAT_ID, text=mensagem, parse_mode="HTML", reply_markup=reply_markup)
+    except Exception as e: logger.error(f"Erro Telegram: {e}")
+
+def criar_teclado_padrao():
+    markup = InlineKeyboardMarkup()
+    markup.row(InlineKeyboardButton("📂 Abertas", callback_data="cmd_abertas"), InlineKeyboardButton("📊 Placar", callback_data="cmd_placar"))
+    markup.row(InlineKeyboardButton("⚙️ Status do Fundo", callback_data="cmd_status"), InlineKeyboardButton("🔍 Forçar Varredura", callback_data="cmd_varrer"))
+    return markup
 
 if bot:
-    threading.Thread(target=bot.infinity_polling, daemon=True).start()
+    @bot.message_handler(commands=['start', 'menu'])
+    def cmd_start(message):
+        bot.reply_to(message, "🎩 <b>BEM-VINDO AO MOTOR INSTITUCIONAL VIP</b>\nSelecione uma opção:", parse_mode="HTML", reply_markup=criar_teclado_padrao())
+
+    @bot.callback_query_handler(func=lambda call: True)
+    def handle_query(call):
+        agora = datetime.now(FUSO_LISBOA)
+        if call.data == "cmd_status":
+            zona = "🟢 Killzone Institucional" if 8 <= agora.hour <= 17 else "🔴 Asiática (Baixa Liquidez)"
+            msg = f"<b>⚙️ STATUS DO MOTOR QUANT</b>\n\n🕒 Hora: {agora.strftime('%H:%M')} (PT)\n📊 Sessão: {zona}\n📡 WebSockets: 🟢 ONLINE"
+            bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, parse_mode="HTML", reply_markup=criar_teclado_padrao())
+        elif call.data == "cmd_abertas":
+            abertas = obter_trades_abertas()
+            msg = "💤 <b>Nenhuma operação aberta.</b>" if not abertas else "📂 <b>OPERAÇÕES EM ANDAMENTO:</b>\n\n" + "".join([f"{'⏳' if t['resultado']=='WAIT' else '🛡️'} <b>{t['ativo']}</b> ({t['direcao']})\n └ Entrada: {t['entrada']} | Fase: {t['resultado']}\n\n" for t in abertas])
+            bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, parse_mode="HTML", reply_markup=criar_teclado_padrao())
+        elif call.data == "cmd_varrer":
+            bot.answer_callback_query(call.id, "A iniciar varredura...")
+            verificar_setups()
 
 # ==========================================
-# ROTAS FLASK (API E DASHBOARD)
+# ⏰ 7. SCHEDULER & FLASK INIT
 # ==========================================
-@app.route('/analisar', methods=['GET'])
-def analisar_api():
-    ativo = request.args.get('ativo', 'XAU')
-    teste = request.args.get('teste', 'false').lower() == 'true'
-    
-    if teste:
-        return jsonify({
-            "status": "SETUP_CONFIRMADO",
-            "ativo": f"{ativo}USD",
-            "estrategia_ativa": "TESTE DE SISTEMA INTEGRADO",
-            "entrada": 2350.50 if ativo == "XAU" else 65000.00,
-            "stop_loss": 2345.00 if ativo == "XAU" else 64500.00,
-            "tp1": 2356.00 if ativo == "XAU" else 65500.00,
-            "tp2": 2362.00 if ativo == "XAU" else 66000.00,
-            "tp3": 2370.00 if ativo == "XAU" else 67000.00,
-            "atr_atual": 12.5,
-            "probabilidade": "90%",
-            "explicacao_estrategia": "Teste operacional da base SQLite e rotas seguras.",
-            "data_hora": datetime.now(FUSO_LISBOA).strftime("%Y-%m-%d %H:%M:%S")
-        })
-
-    resultado = analisar_ativo_interno(ativo)
-    return jsonify(resultado)
-
-@app.route('/radar-mensal', methods=['GET'])
-def radar_mensal():
-    prompt = "Resumo macroeconómico (máx 3 frases) sobre expectativas FED e Payroll para Ouro e Dólar."
-    res = chamar_ia_com_retry(prompt)
-    return jsonify({"radar": res})
+scheduler = BackgroundScheduler(timezone=FUSO_LISBOA)
+scheduler.add_job(verificar_setups, 'cron', minute='0,15,30,45') # Entradas ao fecho da vela M15
+scheduler.add_job(emitir_boletim_macro, 'cron', day_of_week='mon-fri', hour=8, minute=0) # IA às 08h
+scheduler.start()
 
 @app.route('/ping', methods=['GET'])
-def ping(): 
-    return jsonify({"status": "motor_sqlite_online"})
-
-@app.route('/get-historico', methods=['GET'])
-def get_historico(): 
-    return jsonify(ler_historico())
-
-@app.route('/sync-historico', methods=['POST'])
-def sync_historico():
-    salvar_historico(request.json)
-    return jsonify({"status": "sucesso"})
+def ping(): return jsonify({"status": "Servidor Quantitativo Online"})
 
 if __name__ == '__main__':
+    logger.info("A arrancar Motor Institucional...")
+    
+    # 1. Inicia o Bot do Telegram
+    if bot: threading.Thread(target=bot.infinity_polling, daemon=True).start()
+    
+    # 2. Inicia o WebSocket para gestão instantânea de trades
+    threading.Thread(target=iniciar_stream_precos, daemon=True).start()
+    
+    # 3. Inicia o Servidor Web (mantém o bot vivo em cloud hostings)
     port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=port, use_reloader=False)
