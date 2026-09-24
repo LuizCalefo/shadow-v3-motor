@@ -1,9 +1,13 @@
-Flask
+flask
 flask-cors
-requests
 pandas
-openai
+numpy
 pytz
+requests
 pyTelegramBotAPI
+openai
+apscheduler
+websocket-client
+python-dotenv
 gunicorn
 groq
