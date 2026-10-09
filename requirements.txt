@@ -2,12 +2,8 @@ flask
 flask-cors
 pandas
 numpy
-pytz
 requests
 pyTelegramBotAPI
-openai
-apscheduler
-websocket-client
 python-dotenv
 gunicorn
-groq
+mplfinance
