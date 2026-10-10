@@ -10,7 +10,7 @@ import io
 from datetime import datetime
 import pytz
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use('Agg') # Força o modo Non-GUI para servidores em nuvem
 import matplotlib.pyplot as plt
 from flask import Flask, jsonify
 from flask_cors import CORS
@@ -90,62 +90,70 @@ def gerar_imagem_sinal(df, ativo, direcao, entrada, sl, tp1, tp2, topo_caixa, fu
         # Paleta TradingView Dark Mode
         BG_COLOR = '#131722'
         GRID_COLOR = '#2a2e39'
-        BULL_COLOR = '#00bcd4'
-        BEAR_COLOR = '#ef5350'
+        BULL_COLOR = '#00bcd4'  # Ciano TradingView
+        BEAR_COLOR = '#ef5350' # Vermelho TradingView
         TEXT_COLOR = '#d1d4dc'
 
         fig, ax = plt.subplots(figsize=(10, 5), facecolor=BG_COLOR)
         ax.set_facecolor(BG_COLOR)
         
-        # Converter datas e criar eixo X contínuo (sem gaps)
         df = df.copy()
         df['datetime'] = pd.to_datetime(df['datetime'])
-        x_indices = np.arange(len(df))
+        x = np.arange(len(df))
         
-        up = df[df['close'] >= df['open']]
-        down = df[df['close'] < df['open']]
+        # Filtros de Alta e Baixa
+        up = df['close'] >= df['open']
+        down = df['close'] < df['open']
 
-        # Desenhar Wicks (Pavios)
-        ax.vlines(x_indices[up.index], up['low'], up['high'], color=BULL_COLOR, linewidth=1.5)
-        ax.vlines(x_indices[down.index], down['low'], down['high'], color=BEAR_COLOR, linewidth=1.5)
+        # 1. Desenhar Pavios (Wicks) no centro perfeito
+        ax.vlines(x[up], df['low'][up], df['high'][up], color=BULL_COLOR, linewidth=1.2)
+        ax.vlines(x[down], df['low'][down], df['high'][down], color=BEAR_COLOR, linewidth=1.2)
 
-        # Desenhar Bodies (Corpos)
-        ax.vlines(x_indices[up.index], up['open'], up['close'], color=BULL_COLOR, linewidth=5)
-        ax.vlines(x_indices[down.index], down['open'], down['close'], color=BEAR_COLOR, linewidth=5)
+        # 2. Desenhar Corpos (Bodies) com barras retangulares grossas (width=0.7)
+        ax.bar(x[up], df['close'][up] - df['open'][up], bottom=df['open'][up], width=0.7, color=BULL_COLOR, edgecolor=BULL_COLOR)
+        ax.bar(x[down], df['open'][down] - df['close'][down], bottom=df['close'][down], width=0.7, color=BEAR_COLOR, edgecolor=BEAR_COLOR)
         
-        # Linhas Estratégicas
-        ax.axhline(y=entrada, color='white', linestyle='-', linewidth=1.5, label=f'Entrada: {entrada}')
-        ax.axhline(y=sl, color=BEAR_COLOR, linestyle='--', linewidth=1.5, label=f'Stop Loss: {sl}')
-        ax.axhline(y=tp1, color=BULL_COLOR, linestyle='--', linewidth=1.5, label=f'TP1: {tp1}')
-        ax.axhline(y=tp2, color=BULL_COLOR, linestyle='-', linewidth=2, label=f'TP2: {tp2}')
+        # Casas decimais corretas (5 para EUR, 2 para XAU/BTC)
+        casas = 5 if "EUR" in ativo else 2
+        
+        # Linhas Estratégicas Fimathe formatadas
+        ax.axhline(y=entrada, color='white', linestyle='-', linewidth=1.5, label=f'Entrada: {entrada:.{casas}f}')
+        ax.axhline(y=sl, color=BEAR_COLOR, linestyle='--', linewidth=1.5, label=f'Stop Loss: {sl:.{casas}f}')
+        ax.axhline(y=tp1, color=BULL_COLOR, linestyle='--', linewidth=1.5, label=f'TP1: {tp1:.{casas}f}')
+        ax.axhline(y=tp2, color=BULL_COLOR, linestyle='-', linewidth=2, label=f'TP2: {tp2:.{casas}f}')
         
         # Caixa de Liquidez (PO3)
-        ax.axhspan(fundo_caixa, topo_caixa, color='orange', alpha=0.15, label='Caixa Liquidez (PO3)')
+        ax.axhspan(fundo_caixa, topo_caixa, color='#ff9800', alpha=0.15, label='Caixa Liquidez (PO3)', edgecolor='none')
         
-        # Estilização TradingView
+        # Estilização
         ax.set_title(f"{ativo} | {direcao} | 15m", color=TEXT_COLOR, fontsize=12, fontweight='bold', pad=15)
         
         # Eixo Y à direita
         ax.yaxis.tick_right()
-        ax.tick_params(axis='y', colors=TEXT_COLOR, labelsize=10)
+        ax.tick_params(axis='y', colors=TEXT_COLOR, labelsize=10, right=False)
         
-        # Eixo X com horas
-        ax.tick_params(axis='x', colors=TEXT_COLOR, labelsize=9)
-        xticks_step = max(1, len(df) // 8)
-        ax.set_xticks(x_indices[::xticks_step])
+        # Eixo X limpo
+        ax.tick_params(axis='x', colors=TEXT_COLOR, labelsize=9, bottom=False)
+        xticks_step = max(1, len(df) // 6)
+        ax.set_xticks(x[::xticks_step])
         ax.set_xticklabels([df['datetime'].iloc[i].strftime('%H:%M') for i in range(0, len(df), xticks_step)])
         
-        # Grid e Bordas
-        ax.grid(True, color=GRID_COLOR, linestyle='-', linewidth=0.5)
+        # Remover margens artificiais nas bordas laterais
+        ax.set_xlim(-1, len(df))
+        
+        # Grid discreta
+        ax.grid(True, color=GRID_COLOR, linestyle='-', linewidth=0.5, alpha=0.7)
         for spine in ax.spines.values():
             spine.set_color(GRID_COLOR)
             
+        # Legenda com fundo correto e margem fina
         ax.legend(loc='upper left', facecolor=BG_COLOR, edgecolor=GRID_COLOR, labelcolor=TEXT_COLOR, fontsize=8)
         
         plt.tight_layout()
         
+        # bbox_inches='tight' garante que o layout é cortado na perfeição sem bordas grossas
         buf = io.BytesIO()
-        plt.savefig(buf, format='png', dpi=150, facecolor=fig.get_facecolor(), edgecolor='none')
+        plt.savefig(buf, format='png', dpi=150, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
         buf.seek(0)
         plt.close(fig)
         
@@ -398,6 +406,7 @@ def motor_loop():
     while True:
         try:
             gerir_posicoes()
+            # XAU/USD prioridade máxima (Principal), seguido por BTC/USD e EUR/USD
             for simbolo in ["XAU/USD", "BTC/USD", "EUR/USD"]:
                 analisar_mercado(simbolo, simbolo)
         except Exception as e:
