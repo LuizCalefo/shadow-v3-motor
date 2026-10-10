@@ -6,9 +6,11 @@ import pandas as pd
 import numpy as np
 import requests
 import telebot
+from datetime import datetime
+import pytz
 import matplotlib
-matplotlib.use('Agg') # Força o modo Non-GUI para servidores em nuvem (Render)
-import mplfinance as mpf
+matplotlib.use('Agg') # Força o modo Non-GUI para servidores em nuvem
+import matplotlib.pyplot as plt
 from flask import Flask, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -26,6 +28,7 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN) if TELEGRAM_TOKEN else None
 DB_FILE = 'trading_shadow.db'
+FUSO_LISBOA = pytz.timezone('Europe/Lisbon')
 
 # ==========================================
 # 2. BASE DE DADOS TRANSACIONAL
@@ -81,44 +84,40 @@ def enviar_telegram_texto(mensagem):
             print(f"Erro Telegram (Texto): {e}")
 
 # ==========================================
-# 3. GERAÇÃO DO GRÁFICO (MPLFINANCE COM FICHEIRO FÍSICO)
+# 3. GERAÇÃO DE GRÁFICO (MATPLOTLIB PURO - SEGURO)
 # ==========================================
 def gerar_imagem_sinal(df, ativo, direcao, entrada, sl, tp1, tp2, topo_caixa, fundo_caixa):
     nome_ficheiro = f"grafico_{ativo.replace('/', '_').replace(' ', '_')}.png"
     try:
-        df_plot = df.copy()
-        df_plot['datetime'] = pd.to_datetime(df_plot['datetime'])
-        df_plot.set_index('datetime', inplace=True)
+        fig, ax = plt.subplots(figsize=(10, 5), facecolor='#121212')
+        ax.set_facecolor('#121212')
         
-        linhas_fimathe = [
-            dict(y=sl, color='red', linestyle='dashed', width=1.5),
-            dict(y=entrada, color='white', linestyle='solid', width=1.5),
-            dict(y=tp1, color='lightgreen', linestyle='dashed', width=1.5),
-            dict(y=tp2, color='green', linestyle='solid', width=2)
-        ]
+        # Desenha a linha de preço de fecho
+        ax.plot(df.index, df['close'], color='#00d2ff', linewidth=1.5, label='Preço (Close)')
         
-        linhas_liquidez = [
-            dict(y=topo_caixa, color='orange', linestyle='dotted', width=1, alpha=0.5),
-            dict(y=fundo_caixa, color='orange', linestyle='dotted', width=1, alpha=0.5)
-        ]
+        # Linhas Fimathe e PO3
+        ax.axhline(y=entrada, color='white', linestyle='-', linewidth=1.5, label=f'Entrada: {entrada}')
+        ax.axhline(y=sl, color='red', linestyle='--', linewidth=1.5, label=f'Stop Loss: {sl}')
+        ax.axhline(y=tp1, color='lightgreen', linestyle='--', linewidth=1.5, label=f'TP1: {tp1}')
+        ax.axhline(y=tp2, color='green', linestyle='-', linewidth=2, label=f'TP2: {tp2}')
         
-        todas_linhas = linhas_fimathe + linhas_liquidez
-        estilo = mpf.make_mpf_style(base_mpf_style='nightclouds', facecolor='#121212', edgecolor='white', gridcolor='#222222')
+        # Caixa de Liquidez PO3
+        ax.axhspan(fundo_caixa, topo_caixa, color='orange', alpha=0.2, label='Caixa Liquidez (PO3)')
         
-        mpf.plot(
-            df_plot, type='candle', style=estilo, 
-            hlines=todas_linhas,
-            title=f"PO3 + Fimathe | {ativo}",
-            ylabel='Preço',
-            savefig=dict(fname=nome_ficheiro, format='png', dpi=120, bbox_inches='tight'),
-            figsize=(8, 5)
-        )
+        ax.set_title(f"PO3 + Fimathe | {ativo}", color='white', fontsize=12, fontweight='bold')
+        ax.tick_params(colors='white')
+        ax.grid(True, color='#222222', linestyle='--', alpha=0.7)
+        ax.legend(loc='upper left', facecolor='#1e1e1e', edgecolor='none', labelcolor='white', fontsize=8)
+        
+        plt.tight_layout()
+        plt.savefig(nome_ficheiro, dpi=120, facecolor=fig.get_facecolor(), edgecolor='none')
+        plt.close(fig)
         
         if os.path.exists(nome_ficheiro) and os.path.getsize(nome_ficheiro) > 0:
             return nome_ficheiro
         return None
     except Exception as e:
-        print(f"Erro a gerar gráfico em disco: {e}")
+        print(f"Erro a desenhar gráfico: {e}")
         return None
 
 # ==========================================
@@ -127,7 +126,7 @@ def gerar_imagem_sinal(df, ativo, direcao, entrada, sl, tp1, tp2, topo_caixa, fu
 if bot:
     @bot.message_handler(commands=['teste'])
     def comando_teste(message):
-        bot.reply_to(message, "✅ <b>TESTE DE SISTEMA</b>\nO Motor está online. A gerar gráfico de teste (XAU/USD)...", parse_mode="HTML")
+        bot.reply_to(message, "✅ <b>TESTE DE SISTEMA</b>\nO Motor está online. A gerar gráfico de teste (XAU/USD - Principal)...", parse_mode="HTML")
         try:
             df = obter_dados("XAU/USD")
             if df is not None and not df.empty:
@@ -136,13 +135,13 @@ if bot:
                 fundo = zona_acumulacao['low'].min()
                 preco = df.iloc[-1]['close']
                 
-                caminho_img = gerar_imagem_sinal(df, "XAU TESTE", "COMPRA", preco, fundo, topo, topo+10, topo, fundo)
+                caminho_img = gerar_imagem_sinal(df, "XAU/USD", "COMPRA", preco, fundo, topo, topo+10, topo, fundo)
                 if caminho_img:
-                    enviar_telegram_com_grafico("📊 <b>Gráfico de Teste gerado com sucesso via MPLFinance.</b>", caminho_img)
+                    enviar_telegram_com_grafico("📊 <b>Gráfico de Teste (XAU/USD) gerado com sucesso.</b>", caminho_img)
                 else:
                     bot.reply_to(message, "⚠️ O ficheiro de imagem não foi gravado corretamente no disco.")
             else:
-                bot.reply_to(message, "⚠️ Falha ao obter dados da TwelveData para o teste.")
+                bot.reply_to(message, "⚠️ Falha ao obter dados da TwelveData.")
         except Exception as e:
             bot.reply_to(message, f"⚠️ Erro crítico ao gerar imagem: {str(e)}")
 
@@ -150,17 +149,14 @@ if bot:
     def comando_grafico(message):
         try:
             partes = message.text.split()
-            if len(partes) < 2:
-                bot.reply_to(message, "⚠️ Uso correto: `/grafico XAU`, `/grafico BTC` ou `/grafico EUR`", parse_mode="Markdown")
-                return
-                
-            ativo = partes[1].upper()
+            # Se enviar apenas /grafico, assume o ativo principal (XAU)
+            ativo = partes[1].upper() if len(partes) > 1 else "XAU"
+            
             if ativo not in ["XAU", "BTC", "EUR"]:
-                bot.reply_to(message, "⚠️ Ativo não suportado. Tente /grafico XAU")
-                return
+                ativo = "XAU"
                 
             simbolo = "XAU/USD" if ativo == "XAU" else "BTC/USD" if ativo == "BTC" else "EUR/USD"
-            bot.reply_to(message, f"A capturar o gráfico instantâneo de {ativo}...")
+            bot.reply_to(message, f"A capturar o gráfico de {simbolo}...")
             
             df = obter_dados(simbolo)
             if df is not None and not df.empty:
@@ -168,24 +164,75 @@ if bot:
                 topo = zona_acumulacao['high'].max()
                 fundo = zona_acumulacao['low'].min()
                 preco = df.iloc[-1]['close']
-                caminho_img = gerar_imagem_sinal(df, ativo, "SNAPSHOT", preco, fundo, topo, topo+10, topo, fundo)
+                caminho_img = gerar_imagem_sinal(df, simbolo, "SNAPSHOT", preco, fundo, topo, topo+(10 if ativo=="XAU" else 500), topo, fundo)
                 if caminho_img:
-                    enviar_telegram_com_grafico(f"📸 <b>Snapshot de mercado: {ativo}</b>\nCaixa de Acumulação desenhada.", caminho_img)
+                    enviar_telegram_com_grafico(f"📸 <b>Snapshot de mercado: {simbolo}</b>", caminho_img)
                 else:
                     bot.reply_to(message, "⚠️ Erro ao compilar a imagem do gráfico.")
         except Exception as e:
             bot.reply_to(message, f"⚠️ Erro no comando /grafico: {str(e)}")
 
+    # Atalho direto Principal: /graficoxau
+    @bot.message_handler(commands=['graficoxau'])
+    def comando_graficoxau(message):
+        bot.reply_to(message, "A capturar o gráfico principal (XAU/USD)...")
+        df = obter_dados("XAU/USD")
+        if df is not None and not df.empty:
+            zona_acumulacao = df.iloc[-21:-1]
+            topo = zona_acumulacao['high'].max()
+            fundo = zona_acumulacao['low'].min()
+            preco = df.iloc[-1]['close']
+            caminho_img = gerar_imagem_sinal(df, "XAU/USD", "SNAPSHOT", preco, fundo, topo, topo+10, topo, fundo)
+            if caminho_img:
+                enviar_telegram_com_grafico("📸 <b>Snapshot Principal: XAU/USD</b>", caminho_img)
+
+    # Atalho direto Secundário: /graficobtc
+    @bot.message_handler(commands=['graficobtc'])
+    def comando_graficobtc(message):
+        bot.reply_to(message, "A capturar o gráfico secundário (BTC/USD)...")
+        df = obter_dados("BTC/USD")
+        if df is not None and not df.empty:
+            zona_acumulacao = df.iloc[-21:-1]
+            topo = zona_acumulacao['high'].max()
+            fundo = zona_acumulacao['low'].min()
+            preco = df.iloc[-1]['close']
+            caminho_img = gerar_imagem_sinal(df, "BTC/USD", "SNAPSHOT", preco, fundo, topo, topo+500, topo, fundo)
+            if caminho_img:
+                enviar_telegram_com_grafico("📸 <b>Snapshot Secundário: BTC/USD</b>", caminho_img)
+
     @bot.message_handler(commands=['status'])
     def comando_status(message):
-        abertas = executar_query("SELECT * FROM historico WHERE estado_fechado=0", fetch=True)
-        if not abertas:
-            bot.reply_to(message, "🟢 <b>STATUS:</b> Motor a varrer o mercado.\nNenhuma operação aberta de momento.", parse_mode="HTML")
+        agora = datetime.now(FUSO_LISBOA)
+        dia_semana = agora.weekday()
+        hora = agora.hour
+        minuto = agora.minute
+        hora_total = hora + (minuto / 60)
+
+        if dia_semana == 5 or (dia_semana == 4 and hora_total >= 22) or (dia_semana == 6 and hora_total < 23):
+            mercado_estado = "🔴 FECHADO (Fim de Semana)"
+            sessao_ativa = "Nenhuma (Mercado Fechado)"
         else:
-            texto = "🟢 <b>STATUS:</b> Motor ativo.\n📂 <b>Operações Abertas:</b>\n\n"
-            for t in abertas:
-                texto += f"▫️ <b>{t['ativo']}</b> ({t['direcao']}) | Fase: {t['resultado']}\n"
-            bot.reply_to(message, texto, parse_mode="HTML")
+            mercado_estado = "🟢 ABERTO"
+            if 8 <= hora < 17:
+                sessao_ativa = "Londres / Nova Iorque (Sobreposição)"
+            elif 7 <= hora < 16:
+                sessao_ativa = "Sessão de Londres"
+            elif 13 <= hora < 22:
+                sessao_ativa = "Sessão de Nova Iorque"
+            else:
+                sessao_ativa = "Sessão Asiática"
+
+        abertas = executar_query("SELECT * FROM historico WHERE estado_fechado=0", fetch=True)
+        texto_abertas = "".join([f"▫️ <b>{t['ativo']}</b> ({t['direcao']}) | Fase: {t['resultado']}\n" for t in abertas]) if abertas else "Nenhuma operação aberta."
+
+        msg = (
+            f"⚙️ <b>STATUS DO MOTOR QUANTITATIVO</b>\n\n"
+            f"🕒 Hora (Lisboa): <b>{agora.strftime('%H:%M:%S')}</b>\n"
+            f"📈 Mercado: <b>{mercado_estado}</b>\n"
+            f"🌍 Sessão Ativa: <b>{sessao_ativa}</b>\n\n"
+            f"📂 <b>Operações Abertas:</b>\n{texto_abertas}"
+        )
+        bot.reply_to(message, msg, parse_mode="HTML")
 
     @bot.message_handler(commands=['relatorio'])
     def comando_relatorio(message):
@@ -212,7 +259,7 @@ def obter_dados(simbolo):
         for col in ['close', 'high', 'low', 'open']: df[col] = df[col].astype(float)
         return df
     except Exception as e:
-        print(f"Erro ao obter dados da TwelveData: {e}")
+        print(f"Erro ao obter dados: {e}")
         return None
 
 def analisar_mercado(ativo, simbolo):
@@ -256,17 +303,16 @@ def analisar_mercado(ativo, simbolo):
             VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 0)
         ''', (trade_id, ativo, direcao, preco, tp1, tp2, sl))
         
-        caminho_img = gerar_imagem_sinal(df, ativo, direcao, preco, sl, tp1, tp2, topo_caixa, fundo_caixa)
+        caminho_img = gerar_imagem_sinal(df, simbolo, direcao, preco, sl, tp1, tp2, topo_caixa, fundo_caixa)
         
         emoji = "🟢 COMPRA" if direcao == "COMPRA" else "🔴 VENDA"
         msg = (f"⚡ <b>SINAL INSTITUCIONAL | {ativo}</b>\n\n"
-               f"🧠 <b>Lógica:</b> Manipulação de Liquidez (PO3). Expansão Fimathe ativada.\n"
+               f"🧠 <b>Lógica:</b> Manipulação de Liquidez (PO3) + Fimathe.\n"
                f"🔄 Direção: <b>{emoji}</b>\n\n"
                f"📍 Entrada: <code>{preco}</code>\n"
-               f"🛑 Stop Loss: <code>{sl}</code> (Zona Neutra)\n"
+               f"🛑 Stop Loss: <code>{sl}</code>\n"
                f"✅ Take Profit 1: <code>{tp1}</code>\n"
-               f"🚀 Take Profit 2: <code>{tp2}</code>\n\n"
-               f"<i>Arriscar max 1%.</i>")
+               f"🚀 Take Profit 2: <code>{tp2}</code>")
         
         if caminho_img:
             enviar_telegram_com_grafico(msg, caminho_img)
@@ -282,7 +328,7 @@ def gerir_posicoes():
 
     for trade in abertas:
         ativo = trade['ativo']
-        simbolo = "XAU/USD" if ativo == "XAU" else "BTC/USD" if ativo == "BTC" else "EUR/USD"
+        simbolo = ativo # Já vem com o formato XAU/USD ou BTC/USD
         
         df = obter_dados(simbolo)
         if df is None: continue
@@ -294,21 +340,20 @@ def gerir_posicoes():
         if fase == "ACTIVE":
             if (is_compra and preco_atual <= trade['sl']) or (not is_compra and preco_atual >= trade['sl']):
                 executar_query("UPDATE historico SET resultado='LOSS', estado_fechado=1 WHERE id=?", (trade['id'],))
-                enviar_telegram_texto(f"❌ <b>LOSS</b> | {ativo}\nA manipulação falhou e o preço rompeu a Zona Neutra.")
+                enviar_telegram_texto(f"❌ <b>LOSS</b> | {ativo}\nPreço atingiu o Stop Loss.")
             
             elif (is_compra and preco_atual >= trade['tp1']) or (not is_compra and preco_atual <= trade['tp1']):
-                executar_query("UPDATE historico-resultado SET resultado='BREAKEVEN' WHERE id=?", (trade['id'],)) # Correção de query a seguir
                 executar_query("UPDATE historico SET resultado='BREAKEVEN', estado_fechado=0 WHERE id=?", (trade['id'],))
-                enviar_telegram_texto(f"🛡️ <b>TP1 ATINGIDO</b> | {ativo}\nAlvo 1 concluído ({trade['tp1']}). Mova o SL para a entrada.")
+                enviar_telegram_texto(f"🛡️ <b>TP1 ATINGIDO</b> | {ativo}\nAlvo 1 concluído. SL movido para a entrada.")
 
         elif fase == "BREAKEVEN":
             if (is_compra and preco_atual >= trade['tp2']) or (not is_compra and preco_atual <= trade['tp2']):
                 executar_query("UPDATE historico SET resultado='WIN', estado_fechado=1 WHERE id=?", (trade['id'],))
-                enviar_telegram_texto(f"🎯 <b>WIN MÁXIMO (TP2)</b> | {ativo}\nExpansão Fimathe 200% cravada com sucesso!")
+                enviar_telegram_texto(f"🎯 <b>WIN MÁXIMO (TP2)</b> | {ativo}\nExpansão Fimathe cravada!")
             
             elif (is_compra and preco_atual <= trade['entrada']) or (not is_compra and preco_atual >= trade['entrada']):
                 executar_query("UPDATE historico SET resultado='ZERO', estado_fechado=1 WHERE id=?", (trade['id'],))
-                enviar_telegram_texto(f"⚖️ <b>ZERO</b> | {ativo}\nO preço reverteu e tirou-nos na entrada. Capital blindado.")
+                enviar_telegram_texto(f"⚖️ <b>ZERO</b> | {ativo}\nSaída no ponto de entrada.")
 
 # ==========================================
 # 7. LOOP CENTRAL E ROTAS
@@ -317,22 +362,21 @@ def motor_loop():
     while True:
         try:
             gerir_posicoes()
-            for ativo, simbolo in [("XAU", "XAU/USD"), ("BTC", "BTC/USD"), ("EUR", "EUR/USD")]:
-                analisar_mercado(ativo, simbolo)
+            # Prioridade para o XAU/USD (Principal) e depois BTC/USD (Secundário)
+            for simbolo in ["XAU/USD", "BTC/USD", "EUR/USD"]:
+                analisar_mercado(simbolo.replace('/USD', ''), simbolo)
         except Exception as e:
             print(f"Erro no Loop Principal: {e}")
         time.sleep(60)
 
-# Iniciar Thread Principal do Motor
 threading.Thread(target=motor_loop, daemon=True).start()
 
-# Iniciar Thread de Escuta do Telegram
 if bot:
     threading.Thread(target=bot.infinity_polling, daemon=True).start()
 
 @app.route('/ping', methods=['GET'])
 def ping():
-    return jsonify({"status": "Motor PO3+Fimathe a correr perfeitamente com ficheiros temporários para gráficos!"})
+    return jsonify({"status": "Motor PO3+Fimathe a correr com Matplotlib Puro e XAU principal!"})
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
