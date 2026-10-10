@@ -83,15 +83,24 @@ def enviar_telegram_texto(mensagem):
             print(f"Erro Telegram (Texto): {e}")
 
 # ==========================================
-# 3. GERAÇÃO DE GRÁFICO (MEMÓRIA RAM - SEM DISCO)
+# 3. GERAÇÃO DE GRÁFICO (CANDLESTICKS EM MEMÓRIA)
 # ==========================================
 def gerar_imagem_sinal(df, ativo, direcao, entrada, sl, tp1, tp2, topo_caixa, fundo_caixa):
     try:
         fig, ax = plt.subplots(figsize=(10, 5), facecolor='#121212')
         ax.set_facecolor('#121212')
         
-        # Desenha a linha de preço
-        ax.plot(df.index, df['close'], color='#00d2ff', linewidth=1.5, label='Preço Atual')
+        # Filtros para velas de Alta (Bullish) e Baixa (Bearish)
+        up = df[df['close'] >= df['open']]
+        down = df[df['close'] < df['open']]
+
+        # Desenhar os pavios (Wicks)
+        ax.vlines(up.index, up['low'], up['high'], color='#26a69a', linewidth=1)
+        ax.vlines(down.index, down['low'], down['high'], color='#ef5350', linewidth=1)
+
+        # Desenhar os corpos (Bodies)
+        ax.vlines(up.index, up['open'], up['close'], color='#26a69a', linewidth=6)
+        ax.vlines(down.index, down['open'], down['close'], color='#ef5350', linewidth=6)
         
         # Linhas Estratégicas (Fimathe)
         ax.axhline(y=entrada, color='white', linestyle='-', linewidth=1.5, label=f'Entrada: {entrada}')
@@ -109,7 +118,7 @@ def gerar_imagem_sinal(df, ativo, direcao, entrada, sl, tp1, tp2, topo_caixa, fu
         
         plt.tight_layout()
         
-        # Guardar a imagem diretamente na Memória (Buffer) em vez de gravar no disco
+        # Guardar a imagem diretamente na Memória (Buffer)
         buf = io.BytesIO()
         plt.savefig(buf, format='png', dpi=120, facecolor=fig.get_facecolor(), edgecolor='none')
         buf.seek(0)
@@ -126,7 +135,7 @@ def gerar_imagem_sinal(df, ativo, direcao, entrada, sl, tp1, tp2, topo_caixa, fu
 if bot:
     @bot.message_handler(commands=['teste'])
     def comando_teste(message):
-        bot.reply_to(message, "✅ <b>TESTE DE SISTEMA</b>\nO Motor está online. A processar o gráfico na memória (XAU/USD)...", parse_mode="HTML")
+        bot.reply_to(message, "✅ <b>TESTE DE SISTEMA</b>\nO Motor está online. A processar o gráfico de Candlesticks na memória (XAU/USD)...", parse_mode="HTML")
         try:
             df = obter_dados("XAU/USD")
             if df is not None and not df.empty:
@@ -137,7 +146,7 @@ if bot:
                 
                 buf = gerar_imagem_sinal(df, "XAU/USD", "COMPRA", preco, fundo, topo, topo+10, topo, fundo)
                 if buf:
-                    enviar_telegram_com_grafico("📊 <b>Gráfico gerado em memória e editado com pontos Fimathe e PO3.</b>", buf)
+                    enviar_telegram_com_grafico("📊 <b>Gráfico de Candlesticks gerado em memória.</b>", buf)
                 else:
                     bot.reply_to(message, "⚠️ O buffer da imagem falhou.")
             else:
@@ -164,7 +173,7 @@ if bot:
                 
                 buf = gerar_imagem_sinal(df, simbolo, "SNAPSHOT", preco, fundo, topo, topo+(10 if ativo=="XAU" else 500), topo, fundo)
                 if buf:
-                    enviar_telegram_com_grafico(f"📸 <b>Snapshot de mercado editado: {simbolo}</b>", buf)
+                    enviar_telegram_com_grafico(f"📸 <b>Snapshot de mercado em Candlesticks: {simbolo}</b>", buf)
                 else:
                     bot.reply_to(message, "⚠️ Erro ao compilar a imagem.")
         except Exception as e:
@@ -181,7 +190,7 @@ if bot:
             preco = df.iloc[-1]['close']
             buf = gerar_imagem_sinal(df, "XAU/USD", "SNAPSHOT", preco, fundo, topo, topo+10, topo, fundo)
             if buf:
-                enviar_telegram_com_grafico("📸 <b>Gráfico Principal (XAU/USD) gerado na hora!</b>", buf)
+                enviar_telegram_com_grafico("📸 <b>Gráfico Principal (XAU/USD) em Candlesticks!</b>", buf)
 
     @bot.message_handler(commands=['graficobtc'])
     def comando_graficobtc(message):
@@ -194,7 +203,7 @@ if bot:
             preco = df.iloc[-1]['close']
             buf = gerar_imagem_sinal(df, "BTC/USD", "SNAPSHOT", preco, fundo, topo, topo+500, topo, fundo)
             if buf:
-                enviar_telegram_com_grafico("📸 <b>Gráfico Secundário (BTC/USD) gerado na hora!</b>", buf)
+                enviar_telegram_com_grafico("📸 <b>Gráfico Secundário (BTC/USD) em Candlesticks!</b>", buf)
 
     @bot.message_handler(commands=['status'])
     def comando_status(message):
@@ -365,7 +374,7 @@ if bot:
 
 @app.route('/ping', methods=['GET'])
 def ping():
-    return jsonify({"status": "Motor PO3+Fimathe a correr 100% na memória RAM!"})
+    return jsonify({"status": "Motor PO3+Fimathe a correr com gráficos Candlesticks em memória RAM!"})
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
