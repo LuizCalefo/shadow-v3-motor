@@ -6,4 +6,5 @@ requests
 pyTelegramBotAPI
 python-dotenv
 gunicorn
-mplfinance
+matplotlib
+pytz
