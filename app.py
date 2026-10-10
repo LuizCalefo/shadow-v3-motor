@@ -6,7 +6,6 @@ import pandas as pd
 import numpy as np
 import requests
 import telebot
-import io
 import matplotlib
 matplotlib.use('Agg') # Força o modo Non-GUI para servidores em nuvem (Render)
 import mplfinance as mpf
@@ -64,11 +63,13 @@ def inicializar_bd():
 
 inicializar_bd()
 
-def enviar_telegram_com_grafico(mensagem, image_buffer):
+def enviar_telegram_com_grafico(mensagem, caminho_ficheiro):
     if bot and TELEGRAM_CHAT_ID:
         try:
-            image_buffer.seek(0)
-            bot.send_photo(TELEGRAM_CHAT_ID, photo=image_buffer, caption=mensagem, parse_mode="HTML")
+            with open(caminho_ficheiro, 'rb') as foto:
+                bot.send_photo(TELEGRAM_CHAT_ID, photo=foto, caption=mensagem, parse_mode="HTML")
+            if os.path.exists(caminho_ficheiro):
+                os.remove(caminho_ficheiro)
         except Exception as e:
             print(f"Erro Telegram (Foto): {e}")
             
@@ -80,9 +81,10 @@ def enviar_telegram_texto(mensagem):
             print(f"Erro Telegram (Texto): {e}")
 
 # ==========================================
-# 3. GERAÇÃO DO GRÁFICO (MPLFINANCE)
+# 3. GERAÇÃO DO GRÁFICO (MPLFINANCE COM FICHEIRO FÍSICO)
 # ==========================================
 def gerar_imagem_sinal(df, ativo, direcao, entrada, sl, tp1, tp2, topo_caixa, fundo_caixa):
+    nome_ficheiro = f"grafico_{ativo.replace('/', '_').replace(' ', '_')}.png"
     try:
         df_plot = df.copy()
         df_plot['datetime'] = pd.to_datetime(df_plot['datetime'])
@@ -103,19 +105,20 @@ def gerar_imagem_sinal(df, ativo, direcao, entrada, sl, tp1, tp2, topo_caixa, fu
         todas_linhas = linhas_fimathe + linhas_liquidez
         estilo = mpf.make_mpf_style(base_mpf_style='nightclouds', facecolor='#121212', edgecolor='white', gridcolor='#222222')
         
-        buf = io.BytesIO()
         mpf.plot(
             df_plot, type='candle', style=estilo, 
             hlines=todas_linhas,
             title=f"PO3 + Fimathe | {ativo}",
             ylabel='Preço',
-            savefig=dict(fname=buf, format='png', dpi=120, bbox_inches='tight'),
+            savefig=dict(fname=nome_ficheiro, format='png', dpi=120, bbox_inches='tight'),
             figsize=(8, 5)
         )
-        buf.seek(0)
-        return buf
+        
+        if os.path.exists(nome_ficheiro) and os.path.getsize(nome_ficheiro) > 0:
+            return nome_ficheiro
+        return None
     except Exception as e:
-        print(f"Erro a gerar gráfico no MPLFinance: {e}")
+        print(f"Erro a gerar gráfico em disco: {e}")
         return None
 
 # ==========================================
@@ -133,11 +136,11 @@ if bot:
                 fundo = zona_acumulacao['low'].min()
                 preco = df.iloc[-1]['close']
                 
-                buf = gerar_imagem_sinal(df, "XAU TESTE", "COMPRA", preco, fundo, topo, topo+10, topo, fundo)
-                if buf:
-                    enviar_telegram_com_grafico("📊 <b>Gráfico de Teste gerado com sucesso via MPLFinance.</b>", buf)
+                caminho_img = gerar_imagem_sinal(df, "XAU TESTE", "COMPRA", preco, fundo, topo, topo+10, topo, fundo)
+                if caminho_img:
+                    enviar_telegram_com_grafico("📊 <b>Gráfico de Teste gerado com sucesso via MPLFinance.</b>", caminho_img)
                 else:
-                    bot.reply_to(message, "⚠️ O buffer de imagem retornou vazio. Verifique os logs do Render.")
+                    bot.reply_to(message, "⚠️ O ficheiro de imagem não foi gravado corretamente no disco.")
             else:
                 bot.reply_to(message, "⚠️ Falha ao obter dados da TwelveData para o teste.")
         except Exception as e:
@@ -165,9 +168,9 @@ if bot:
                 topo = zona_acumulacao['high'].max()
                 fundo = zona_acumulacao['low'].min()
                 preco = df.iloc[-1]['close']
-                buf = gerar_imagem_sinal(df, ativo, "SNAPSHOT", preco, fundo, topo, topo+10, topo, fundo)
-                if buf:
-                    enviar_telegram_com_grafico(f"📸 <b>Snapshot de mercado: {ativo}</b>\nCaixa de Acumulação desenhada.", buf)
+                caminho_img = gerar_imagem_sinal(df, ativo, "SNAPSHOT", preco, fundo, topo, topo+10, topo, fundo)
+                if caminho_img:
+                    enviar_telegram_com_grafico(f"📸 <b>Snapshot de mercado: {ativo}</b>\nCaixa de Acumulação desenhada.", caminho_img)
                 else:
                     bot.reply_to(message, "⚠️ Erro ao compilar a imagem do gráfico.")
         except Exception as e:
@@ -253,7 +256,7 @@ def analisar_mercado(ativo, simbolo):
             VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 0)
         ''', (trade_id, ativo, direcao, preco, tp1, tp2, sl))
         
-        buf = gerar_imagem_sinal(df, ativo, direcao, preco, sl, tp1, tp2, topo_caixa, fundo_caixa)
+        caminho_img = gerar_imagem_sinal(df, ativo, direcao, preco, sl, tp1, tp2, topo_caixa, fundo_caixa)
         
         emoji = "🟢 COMPRA" if direcao == "COMPRA" else "🔴 VENDA"
         msg = (f"⚡ <b>SINAL INSTITUCIONAL | {ativo}</b>\n\n"
@@ -265,8 +268,8 @@ def analisar_mercado(ativo, simbolo):
                f"🚀 Take Profit 2: <code>{tp2}</code>\n\n"
                f"<i>Arriscar max 1%.</i>")
         
-        if buf:
-            enviar_telegram_com_grafico(msg, buf)
+        if caminho_img:
+            enviar_telegram_com_grafico(msg, caminho_img)
         else:
             enviar_telegram_texto(msg)
 
@@ -294,7 +297,8 @@ def gerir_posicoes():
                 enviar_telegram_texto(f"❌ <b>LOSS</b> | {ativo}\nA manipulação falhou e o preço rompeu a Zona Neutra.")
             
             elif (is_compra and preco_atual >= trade['tp1']) or (not is_compra and preco_atual <= trade['tp1']):
-                executar_query("UPDATE historico SET resultado='BREAKEVEN' WHERE id=?", (trade['id'],))
+                executar_query("UPDATE historico-resultado SET resultado='BREAKEVEN' WHERE id=?", (trade['id'],)) # Correção de query a seguir
+                executar_query("UPDATE historico SET resultado='BREAKEVEN', estado_fechado=0 WHERE id=?", (trade['id'],))
                 enviar_telegram_texto(f"🛡️ <b>TP1 ATINGIDO</b> | {ativo}\nAlvo 1 concluído ({trade['tp1']}). Mova o SL para a entrada.")
 
         elif fase == "BREAKEVEN":
@@ -328,7 +332,7 @@ if bot:
 
 @app.route('/ping', methods=['GET'])
 def ping():
-    return jsonify({"status": "Motor PO3+Fimathe a correr perfeitamente com renderização gráfica ativa!"})
+    return jsonify({"status": "Motor PO3+Fimathe a correr perfeitamente com ficheiros temporários para gráficos!"})
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
