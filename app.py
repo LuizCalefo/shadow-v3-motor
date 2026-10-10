@@ -10,7 +10,7 @@ import io
 from datetime import datetime
 import pytz
 import matplotlib
-matplotlib.use('Agg') # Força o modo Non-GUI para servidores em nuvem
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from flask import Flask, jsonify
 from flask_cors import CORS
@@ -83,44 +83,69 @@ def enviar_telegram_texto(mensagem):
             print(f"Erro Telegram (Texto): {e}")
 
 # ==========================================
-# 3. GERAÇÃO DE GRÁFICO (CANDLESTICKS EM MEMÓRIA)
+# 3. GERAÇÃO DE GRÁFICO (IDÊNTICO AO TRADINGVIEW)
 # ==========================================
 def gerar_imagem_sinal(df, ativo, direcao, entrada, sl, tp1, tp2, topo_caixa, fundo_caixa):
     try:
-        fig, ax = plt.subplots(figsize=(10, 5), facecolor='#121212')
-        ax.set_facecolor('#121212')
+        # Paleta TradingView Dark Mode
+        BG_COLOR = '#131722'
+        GRID_COLOR = '#2a2e39'
+        BULL_COLOR = '#00bcd4'
+        BEAR_COLOR = '#ef5350'
+        TEXT_COLOR = '#d1d4dc'
+
+        fig, ax = plt.subplots(figsize=(10, 5), facecolor=BG_COLOR)
+        ax.set_facecolor(BG_COLOR)
         
-        # Filtros para velas de Alta (Bullish) e Baixa (Bearish)
+        # Converter datas e criar eixo X contínuo (sem gaps)
+        df = df.copy()
+        df['datetime'] = pd.to_datetime(df['datetime'])
+        x_indices = np.arange(len(df))
+        
         up = df[df['close'] >= df['open']]
         down = df[df['close'] < df['open']]
 
-        # Desenhar os pavios (Wicks)
-        ax.vlines(up.index, up['low'], up['high'], color='#26a69a', linewidth=1)
-        ax.vlines(down.index, down['low'], down['high'], color='#ef5350', linewidth=1)
+        # Desenhar Wicks (Pavios)
+        ax.vlines(x_indices[up.index], up['low'], up['high'], color=BULL_COLOR, linewidth=1.5)
+        ax.vlines(x_indices[down.index], down['low'], down['high'], color=BEAR_COLOR, linewidth=1.5)
 
-        # Desenhar os corpos (Bodies)
-        ax.vlines(up.index, up['open'], up['close'], color='#26a69a', linewidth=6)
-        ax.vlines(down.index, down['open'], down['close'], color='#ef5350', linewidth=6)
+        # Desenhar Bodies (Corpos)
+        ax.vlines(x_indices[up.index], up['open'], up['close'], color=BULL_COLOR, linewidth=5)
+        ax.vlines(x_indices[down.index], down['open'], down['close'], color=BEAR_COLOR, linewidth=5)
         
-        # Linhas Estratégicas (Fimathe)
+        # Linhas Estratégicas
         ax.axhline(y=entrada, color='white', linestyle='-', linewidth=1.5, label=f'Entrada: {entrada}')
-        ax.axhline(y=sl, color='red', linestyle='--', linewidth=1.5, label=f'Stop Loss: {sl}')
-        ax.axhline(y=tp1, color='lightgreen', linestyle='--', linewidth=1.5, label=f'TP1: {tp1}')
-        ax.axhline(y=tp2, color='green', linestyle='-', linewidth=2, label=f'TP2: {tp2}')
+        ax.axhline(y=sl, color=BEAR_COLOR, linestyle='--', linewidth=1.5, label=f'Stop Loss: {sl}')
+        ax.axhline(y=tp1, color=BULL_COLOR, linestyle='--', linewidth=1.5, label=f'TP1: {tp1}')
+        ax.axhline(y=tp2, color=BULL_COLOR, linestyle='-', linewidth=2, label=f'TP2: {tp2}')
         
         # Caixa de Liquidez (PO3)
-        ax.axhspan(fundo_caixa, topo_caixa, color='orange', alpha=0.2, label='Caixa Liquidez (PO3)')
+        ax.axhspan(fundo_caixa, topo_caixa, color='orange', alpha=0.15, label='Caixa Liquidez (PO3)')
         
-        ax.set_title(f"Setup PO3 + Fimathe | {ativo} ({direcao})", color='white', fontsize=12, fontweight='bold')
-        ax.tick_params(colors='white')
-        ax.grid(True, color='#222222', linestyle='--', alpha=0.7)
-        ax.legend(loc='upper left', facecolor='#1e1e1e', edgecolor='none', labelcolor='white', fontsize=8)
+        # Estilização TradingView
+        ax.set_title(f"{ativo} | {direcao} | 15m", color=TEXT_COLOR, fontsize=12, fontweight='bold', pad=15)
+        
+        # Eixo Y à direita
+        ax.yaxis.tick_right()
+        ax.tick_params(axis='y', colors=TEXT_COLOR, labelsize=10)
+        
+        # Eixo X com horas
+        ax.tick_params(axis='x', colors=TEXT_COLOR, labelsize=9)
+        xticks_step = max(1, len(df) // 8)
+        ax.set_xticks(x_indices[::xticks_step])
+        ax.set_xticklabels([df['datetime'].iloc[i].strftime('%H:%M') for i in range(0, len(df), xticks_step)])
+        
+        # Grid e Bordas
+        ax.grid(True, color=GRID_COLOR, linestyle='-', linewidth=0.5)
+        for spine in ax.spines.values():
+            spine.set_color(GRID_COLOR)
+            
+        ax.legend(loc='upper left', facecolor=BG_COLOR, edgecolor=GRID_COLOR, labelcolor=TEXT_COLOR, fontsize=8)
         
         plt.tight_layout()
         
-        # Guardar a imagem diretamente na Memória (Buffer)
         buf = io.BytesIO()
-        plt.savefig(buf, format='png', dpi=120, facecolor=fig.get_facecolor(), edgecolor='none')
+        plt.savefig(buf, format='png', dpi=150, facecolor=fig.get_facecolor(), edgecolor='none')
         buf.seek(0)
         plt.close(fig)
         
@@ -135,7 +160,7 @@ def gerar_imagem_sinal(df, ativo, direcao, entrada, sl, tp1, tp2, topo_caixa, fu
 if bot:
     @bot.message_handler(commands=['teste'])
     def comando_teste(message):
-        bot.reply_to(message, "✅ <b>TESTE DE SISTEMA</b>\nO Motor está online. A processar o gráfico de Candlesticks na memória (XAU/USD)...", parse_mode="HTML")
+        bot.reply_to(message, "✅ <b>TESTE DE SISTEMA</b>\nA gerar gráfico de Candlesticks (XAU/USD)...", parse_mode="HTML")
         try:
             df = obter_dados("XAU/USD")
             if df is not None and not df.empty:
@@ -144,13 +169,14 @@ if bot:
                 fundo = zona_acumulacao['low'].min()
                 preco = df.iloc[-1]['close']
                 
-                buf = gerar_imagem_sinal(df, "XAU/USD", "COMPRA", preco, fundo, topo, topo+10, topo, fundo)
-                if buf:
-                    enviar_telegram_com_grafico("📊 <b>Gráfico de Candlesticks gerado em memória.</b>", buf)
-                else:
-                    bot.reply_to(message, "⚠️ O buffer da imagem falhou.")
-            else:
-                bot.reply_to(message, "⚠️ Falha ao obter dados da TwelveData.")
+                tamanho = topo - fundo
+                sl = fundo - tamanho
+                tp1 = topo + tamanho
+                tp2 = topo + (tamanho * 2)
+                
+                buf = gerar_imagem_sinal(df, "XAU/USD", "TESTE", preco, sl, tp1, tp2, topo, fundo)
+                if buf: enviar_telegram_com_grafico("📊 <b>Gráfico de Teste (Estilo TradingView)</b>", buf)
+                else: bot.reply_to(message, "⚠️ O buffer da imagem falhou.")
         except Exception as e:
             bot.reply_to(message, f"⚠️ Erro crítico: {str(e)}")
 
@@ -162,7 +188,7 @@ if bot:
             if ativo not in ["XAU", "BTC", "EUR"]: ativo = "XAU"
                 
             simbolo = "XAU/USD" if ativo == "XAU" else "BTC/USD" if ativo == "BTC" else "EUR/USD"
-            bot.reply_to(message, f"A compilar gráfico na memória para {simbolo}...")
+            bot.reply_to(message, f"A compilar gráfico para {simbolo}...")
             
             df = obter_dados(simbolo)
             if df is not None and not df.empty:
@@ -171,39 +197,51 @@ if bot:
                 fundo = zona_acumulacao['low'].min()
                 preco = df.iloc[-1]['close']
                 
-                buf = gerar_imagem_sinal(df, simbolo, "SNAPSHOT", preco, fundo, topo, topo+(10 if ativo=="XAU" else 500), topo, fundo)
-                if buf:
-                    enviar_telegram_com_grafico(f"📸 <b>Snapshot de mercado em Candlesticks: {simbolo}</b>", buf)
-                else:
-                    bot.reply_to(message, "⚠️ Erro ao compilar a imagem.")
+                tamanho = topo - fundo
+                sl = fundo - tamanho
+                tp1 = topo + tamanho
+                tp2 = topo + (tamanho * 2)
+                
+                buf = gerar_imagem_sinal(df, simbolo, "SNAPSHOT", preco, sl, tp1, tp2, topo, fundo)
+                if buf: enviar_telegram_com_grafico(f"📸 <b>Snapshot: {simbolo}</b>", buf)
         except Exception as e:
             bot.reply_to(message, f"⚠️ Erro: {str(e)}")
 
     @bot.message_handler(commands=['graficoxau'])
     def comando_graficoxau(message):
-        bot.reply_to(message, "A desenhar gráfico principal (XAU/USD)...")
+        bot.reply_to(message, "A desenhar gráfico XAU/USD...")
         df = obter_dados("XAU/USD")
         if df is not None and not df.empty:
             zona_acumulacao = df.iloc[-21:-1]
             topo = zona_acumulacao['high'].max()
             fundo = zona_acumulacao['low'].min()
             preco = df.iloc[-1]['close']
-            buf = gerar_imagem_sinal(df, "XAU/USD", "SNAPSHOT", preco, fundo, topo, topo+10, topo, fundo)
-            if buf:
-                enviar_telegram_com_grafico("📸 <b>Gráfico Principal (XAU/USD) em Candlesticks!</b>", buf)
+            
+            tamanho = topo - fundo
+            sl = fundo - tamanho
+            tp1 = topo + tamanho
+            tp2 = topo + (tamanho * 2)
+            
+            buf = gerar_imagem_sinal(df, "XAU/USD", "SNAPSHOT", preco, sl, tp1, tp2, topo, fundo)
+            if buf: enviar_telegram_com_grafico("📸 <b>Gráfico XAU/USD gerado!</b>", buf)
 
     @bot.message_handler(commands=['graficobtc'])
     def comando_graficobtc(message):
-        bot.reply_to(message, "A desenhar gráfico secundário (BTC/USD)...")
+        bot.reply_to(message, "A desenhar gráfico BTC/USD...")
         df = obter_dados("BTC/USD")
         if df is not None and not df.empty:
             zona_acumulacao = df.iloc[-21:-1]
             topo = zona_acumulacao['high'].max()
             fundo = zona_acumulacao['low'].min()
             preco = df.iloc[-1]['close']
-            buf = gerar_imagem_sinal(df, "BTC/USD", "SNAPSHOT", preco, fundo, topo, topo+500, topo, fundo)
-            if buf:
-                enviar_telegram_com_grafico("📸 <b>Gráfico Secundário (BTC/USD) em Candlesticks!</b>", buf)
+            
+            tamanho = topo - fundo
+            sl = fundo - tamanho
+            tp1 = topo + tamanho
+            tp2 = topo + (tamanho * 2)
+            
+            buf = gerar_imagem_sinal(df, "BTC/USD", "SNAPSHOT", preco, sl, tp1, tp2, topo, fundo)
+            if buf: enviar_telegram_com_grafico("📸 <b>Gráfico BTC/USD gerado!</b>", buf)
 
     @bot.message_handler(commands=['status'])
     def comando_status(message):
@@ -214,23 +252,23 @@ if bot:
         hora_total = hora + (minuto / 60)
 
         if dia_semana == 5 or (dia_semana == 4 and hora_total >= 22) or (dia_semana == 6 and hora_total < 23):
-            mercado_estado = "🔴 FECHADO (Fim de Semana)"
-            sessao_ativa = "Nenhuma (Mercado Fechado)"
+            mercado_estado = "🔴 FECHADO"
+            sessao_ativa = "Fim de Semana"
         else:
             mercado_estado = "🟢 ABERTO"
-            if 8 <= hora < 17: sessao_ativa = "Londres / Nova Iorque (Sobreposição)"
-            elif 7 <= hora < 16: sessao_ativa = "Sessão de Londres"
-            elif 13 <= hora < 22: sessao_ativa = "Sessão de Nova Iorque"
-            else: sessao_ativa = "Sessão Asiática"
+            if 8 <= hora < 17: sessao_ativa = "Londres / Nova Iorque"
+            elif 7 <= hora < 16: sessao_ativa = "Londres"
+            elif 13 <= hora < 22: sessao_ativa = "Nova Iorque"
+            else: sessao_ativa = "Asiática"
 
         abertas = executar_query("SELECT * FROM historico WHERE estado_fechado=0", fetch=True)
         texto_abertas = "".join([f"▫️ <b>{t['ativo']}</b> ({t['direcao']}) | Fase: {t['resultado']}\n" for t in abertas]) if abertas else "Nenhuma operação aberta."
 
-        msg = (f"⚙️ <b>STATUS DO MOTOR QUANTITATIVO</b>\n\n"
-               f"🕒 Hora (Lisboa): <b>{agora.strftime('%H:%M:%S')}</b>\n"
+        msg = (f"⚙️ <b>STATUS</b>\n\n"
+               f"🕒 Hora (LX): <b>{agora.strftime('%H:%M')}</b>\n"
                f"📈 Mercado: <b>{mercado_estado}</b>\n"
-               f"🌍 Sessão Ativa: <b>{sessao_ativa}</b>\n\n"
-               f"📂 <b>Operações Abertas:</b>\n{texto_abertas}")
+               f"🌍 Sessão: <b>{sessao_ativa}</b>\n\n"
+               f"📂 <b>Abertas:</b>\n{texto_abertas}")
         bot.reply_to(message, msg, parse_mode="HTML")
 
     @bot.message_handler(commands=['relatorio'])
@@ -241,7 +279,7 @@ if bot:
         zeros = sum(1 for t in trades if t['resultado'] == 'ZERO')
         total = wins + losses + zeros
         winrate = (wins / total * 100) if total > 0 else 0
-        bot.reply_to(message, f"📊 <b>RELATÓRIO GLOBAL</b>\n\n✅ Wins: {wins}\n❌ Losses: {losses}\n⚖️ 0a0 (Breakeven): {zeros}\n\n🎯 <b>Winrate:</b> {winrate:.1f}%", parse_mode="HTML")
+        bot.reply_to(message, f"📊 <b>RELATÓRIO</b>\n\n✅ Wins: {wins}\n❌ Losses: {losses}\n⚖️ 0a0: {zeros}\n\n🎯 <b>Winrate:</b> {winrate:.1f}%", parse_mode="HTML")
 
 # ==========================================
 # 5. MOTOR ESTRATÉGICO: PO3 + FIMATHE
@@ -360,7 +398,6 @@ def motor_loop():
     while True:
         try:
             gerir_posicoes()
-            # XAU/USD prioridade máxima (Principal), seguido por BTC/USD e EUR/USD
             for simbolo in ["XAU/USD", "BTC/USD", "EUR/USD"]:
                 analisar_mercado(simbolo, simbolo)
         except Exception as e:
@@ -374,7 +411,7 @@ if bot:
 
 @app.route('/ping', methods=['GET'])
 def ping():
-    return jsonify({"status": "Motor PO3+Fimathe a correr com gráficos Candlesticks em memória RAM!"})
+    return jsonify({"status": "Motor PO3+Fimathe 100% estilo TradingView!"})
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
