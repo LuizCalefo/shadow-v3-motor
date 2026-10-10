@@ -7,6 +7,8 @@ import numpy as np
 import requests
 import telebot
 import io
+import matplotlib
+matplotlib.use('Agg') # Força o modo Non-GUI para servidores em nuvem (Render)
 import mplfinance as mpf
 from flask import Flask, jsonify
 from flask_cors import CORS
@@ -68,14 +70,14 @@ def enviar_telegram_com_grafico(mensagem, image_buffer):
             image_buffer.seek(0)
             bot.send_photo(TELEGRAM_CHAT_ID, photo=image_buffer, caption=mensagem, parse_mode="HTML")
         except Exception as e:
-            print(f"Erro Telegram: {e}")
+            print(f"Erro Telegram (Foto): {e}")
             
 def enviar_telegram_texto(mensagem):
     if bot and TELEGRAM_CHAT_ID:
         try:
             bot.send_message(TELEGRAM_CHAT_ID, text=mensagem, parse_mode="HTML")
         except Exception as e:
-            pass
+            print(f"Erro Telegram (Texto): {e}")
 
 # ==========================================
 # 3. GERAÇÃO DO GRÁFICO (MPLFINANCE)
@@ -110,9 +112,10 @@ def gerar_imagem_sinal(df, ativo, direcao, entrada, sl, tp1, tp2, topo_caixa, fu
             savefig=dict(fname=buf, format='png', dpi=120, bbox_inches='tight'),
             figsize=(8, 5)
         )
+        buf.seek(0)
         return buf
     except Exception as e:
-        print(f"Erro a gerar gráfico: {e}")
+        print(f"Erro a gerar gráfico no MPLFinance: {e}")
         return None
 
 # ==========================================
@@ -121,21 +124,34 @@ def gerar_imagem_sinal(df, ativo, direcao, entrada, sl, tp1, tp2, topo_caixa, fu
 if bot:
     @bot.message_handler(commands=['teste'])
     def comando_teste(message):
-        bot.reply_to(message, "✅ <b>TESTE DE SISTEMA</b>\nO Motor Quantitativo está online e a responder. A gerar gráfico de teste (XAU/USD)...", parse_mode="HTML")
-        df = obter_dados("XAU/USD")
-        if df is not None:
-            zona_acumulacao = df.iloc[-21:-1]
-            topo = zona_acumulacao['high'].max()
-            fundo = zona_acumulacao['low'].min()
-            preco = df.iloc[-1]['close']
-            buf = gerar_imagem_sinal(df, "XAU TESTE", "N/A", preco, fundo, topo, topo+10, topo, fundo)
-            if buf:
-                enviar_telegram_com_grafico("📊 Gráfico de Teste gerado com sucesso.", buf)
+        bot.reply_to(message, "✅ <b>TESTE DE SISTEMA</b>\nO Motor está online. A gerar gráfico de teste (XAU/USD)...", parse_mode="HTML")
+        try:
+            df = obter_dados("XAU/USD")
+            if df is not None and not df.empty:
+                zona_acumulacao = df.iloc[-21:-1]
+                topo = zona_acumulacao['high'].max()
+                fundo = zona_acumulacao['low'].min()
+                preco = df.iloc[-1]['close']
+                
+                buf = gerar_imagem_sinal(df, "XAU TESTE", "COMPRA", preco, fundo, topo, topo+10, topo, fundo)
+                if buf:
+                    enviar_telegram_com_grafico("📊 <b>Gráfico de Teste gerado com sucesso via MPLFinance.</b>", buf)
+                else:
+                    bot.reply_to(message, "⚠️ O buffer de imagem retornou vazio. Verifique os logs do Render.")
+            else:
+                bot.reply_to(message, "⚠️ Falha ao obter dados da TwelveData para o teste.")
+        except Exception as e:
+            bot.reply_to(message, f"⚠️ Erro crítico ao gerar imagem: {str(e)}")
 
     @bot.message_handler(commands=['grafico'])
     def comando_grafico(message):
         try:
-            ativo = message.text.split()[1].upper()
+            partes = message.text.split()
+            if len(partes) < 2:
+                bot.reply_to(message, "⚠️ Uso correto: `/grafico XAU`, `/grafico BTC` ou `/grafico EUR`", parse_mode="Markdown")
+                return
+                
+            ativo = partes[1].upper()
             if ativo not in ["XAU", "BTC", "EUR"]:
                 bot.reply_to(message, "⚠️ Ativo não suportado. Tente /grafico XAU")
                 return
@@ -144,7 +160,7 @@ if bot:
             bot.reply_to(message, f"A capturar o gráfico instantâneo de {ativo}...")
             
             df = obter_dados(simbolo)
-            if df is not None:
+            if df is not None and not df.empty:
                 zona_acumulacao = df.iloc[-21:-1]
                 topo = zona_acumulacao['high'].max()
                 fundo = zona_acumulacao['low'].min()
@@ -152,8 +168,10 @@ if bot:
                 buf = gerar_imagem_sinal(df, ativo, "SNAPSHOT", preco, fundo, topo, topo+10, topo, fundo)
                 if buf:
                     enviar_telegram_com_grafico(f"📸 <b>Snapshot de mercado: {ativo}</b>\nCaixa de Acumulação desenhada.", buf)
-        except IndexError:
-            bot.reply_to(message, "⚠️ Uso correto: /grafico XAU")
+                else:
+                    bot.reply_to(message, "⚠️ Erro ao compilar a imagem do gráfico.")
+        except Exception as e:
+            bot.reply_to(message, f"⚠️ Erro no comando /grafico: {str(e)}")
 
     @bot.message_handler(commands=['status'])
     def comando_status(message):
@@ -190,7 +208,8 @@ def obter_dados(simbolo):
         df = pd.DataFrame(dados["values"])[::-1].reset_index(drop=True)
         for col in ['close', 'high', 'low', 'open']: df[col] = df[col].astype(float)
         return df
-    except:
+    except Exception as e:
+        print(f"Erro ao obter dados da TwelveData: {e}")
         return None
 
 def analisar_mercado(ativo, simbolo):
@@ -241,7 +260,7 @@ def analisar_mercado(ativo, simbolo):
                f"🧠 <b>Lógica:</b> Manipulação de Liquidez (PO3). Expansão Fimathe ativada.\n"
                f"🔄 Direção: <b>{emoji}</b>\n\n"
                f"📍 Entrada: <code>{preco}</code>\n"
-               f"🛑 Stop Loss: <code>{sl}</code> (Acima da Zona Neutra)\n"
+               f"🛑 Stop Loss: <code>{sl}</code> (Zona Neutra)\n"
                f"✅ Take Profit 1: <code>{tp1}</code>\n"
                f"🚀 Take Profit 2: <code>{tp2}</code>\n\n"
                f"<i>Arriscar max 1%.</i>")
@@ -297,7 +316,7 @@ def motor_loop():
             for ativo, simbolo in [("XAU", "XAU/USD"), ("BTC", "BTC/USD"), ("EUR", "EUR/USD")]:
                 analisar_mercado(ativo, simbolo)
         except Exception as e:
-            print(f"Erro no Loop: {e}")
+            print(f"Erro no Loop Principal: {e}")
         time.sleep(60)
 
 # Iniciar Thread Principal do Motor
@@ -309,7 +328,7 @@ if bot:
 
 @app.route('/ping', methods=['GET'])
 def ping():
-    return jsonify({"status": "Motor PO3+Fimathe a correr com gráficos interativos!"})
+    return jsonify({"status": "Motor PO3+Fimathe a correr perfeitamente com renderização gráfica ativa!"})
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
